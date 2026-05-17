@@ -1,4 +1,5 @@
 import { assertOwnsCase } from '@/server/auth/ownership';
+import { toCaseSummary } from '@/server/db/cases';
 import { readDb } from '@/server/db/local-store';
 import { deleteCaseDeep } from '@/server/db/deletion';
 import { jsonError, jsonOk } from '@/server/http';
@@ -10,7 +11,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ caseId: st
     const db = await readDb();
     const caseRecord = db.cases.find((item) => item.id === caseId && item.deletedAt === null);
     if (!caseRecord) return jsonError(new Error('case_not_found'), 404);
-    return jsonOk({ case: caseRecord });
+    return jsonOk({ case: toCaseSummary(caseRecord) });
   } catch (error) {
     return jsonError(error, 403);
   }

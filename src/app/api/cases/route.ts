@@ -1,5 +1,5 @@
 import { getOrCreateSessionId, getSessionId } from '@/server/auth/session';
-import { createAnonymousCase } from '@/server/db/cases';
+import { createAnonymousCase, toCaseSummary } from '@/server/db/cases';
 import { readDb } from '@/server/db/local-store';
 import { jsonError, jsonOk } from '@/server/http';
 
@@ -37,7 +37,7 @@ export async function GET() {
 export async function POST() {
   try {
     const caseRecord = await createAnonymousCase(await getOrCreateSessionId());
-    return jsonOk({ case: caseRecord });
+    return jsonOk({ case: toCaseSummary(caseRecord) });
   } catch (error) {
     return jsonError(error, 500);
   }

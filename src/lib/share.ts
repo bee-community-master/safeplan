@@ -1,6 +1,5 @@
 export type SharedReportCard = {
   id: string;
-  fileId: string;
   title: string;
   dateCandidate: string | null;
   confidenceLevel: number;

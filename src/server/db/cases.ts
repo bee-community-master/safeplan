@@ -40,3 +40,14 @@ export async function createAnonymousCase(sessionId: string): Promise<CaseRecord
     return record;
   });
 }
+
+export function toCaseSummary(caseRecord: CaseRecord) {
+  return {
+    id: caseRecord.id,
+    title: caseRecord.title,
+    status: caseRecord.status,
+    retentionUntil: caseRecord.retentionUntil,
+    createdAt: caseRecord.createdAt,
+    updatedAt: caseRecord.updatedAt
+  };
+}

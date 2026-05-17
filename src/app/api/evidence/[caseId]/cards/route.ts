@@ -20,7 +20,6 @@ export async function GET(_: Request, { params }: { params: Promise<{ caseId: st
       .filter((card) => card.caseId === caseId && card.deletedAt === null)
       .map((card) => ({
         id: card.id,
-        fileId: card.fileId,
         originalFileName: db.evidenceFiles.find((file) => file.id === card.fileId)?.originalName ?? '원본 파일',
         title: card.title,
         summaryKo: card.summaryKo,

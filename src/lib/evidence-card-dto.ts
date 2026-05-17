@@ -1,6 +1,5 @@
 export interface EvidenceCardReviewDto {
   id: string;
-  fileId: string;
   originalFileName: string;
   title: string;
   summaryKo: string;

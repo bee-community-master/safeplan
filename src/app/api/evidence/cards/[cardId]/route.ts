@@ -28,7 +28,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ca
       db.auditEvents.push({ id: id('audit'), userId: db.cases.find((item) => item.id === record.caseId)?.userId ?? null, caseId: record.caseId, type: 'card.updated', metadataJson: { cardId: record.id, includeInReport: record.includeInReport, userConfirmed: record.userConfirmed }, createdAt: record.updatedAt });
       return record;
     });
-    return jsonOk({ card });
+    return jsonOk({ card: { id: card.id, includeInReport: card.includeInReport, userConfirmed: card.userConfirmed, updatedAt: card.updatedAt } });
   } catch (error) {
     return jsonError(error, 400);
   }

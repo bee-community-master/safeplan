@@ -25,7 +25,6 @@ export async function generateReport(caseId: string): Promise<ReportRecord> {
   const pdfSha256 = sha256Hex(pdf);
   const snapshotCards: ReportSnapshot['cards'] = cards.map((card) => ({
     id: card.id,
-    fileId: card.fileId,
     title: card.title,
     dateCandidate: card.dateCandidate,
     confidenceLevel: card.confidenceLevel,
