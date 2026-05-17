@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { LIMITS, PRICE_KRW } from '@/lib/constants';
+import { PageHero, ProductFlowPreview, SecondaryLink } from '@/components/DesignSystem';
 import { SafetyNotice } from '@/components/SafetyNotice';
 
 export default function EvidenceStartPage() {
@@ -15,22 +16,35 @@ export default function EvidenceStartPage() {
     router.push(`/evidence/${data.case.id}/upload`);
   }
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <SafetyNotice />
-      <section className="rounded-3xl bg-white p-6 shadow-sm">
-        <h1 className="text-3xl font-bold">상담자료 준비 시작</h1>
-        <p className="mt-3 leading-7 text-stone-700">증거 정리, 자료 타임라인, 상담자료 준비를 위한 유료 흐름입니다. 결제 전 자료가 충분한지 확인하고, 민감자료 처리와 외부 분석 서비스 이용에 동의합니다.</p>
-        <dl className="mt-5 grid gap-3 text-sm md:grid-cols-2">
-          <div className="rounded-xl bg-calm p-3"><dt className="font-bold">가격</dt><dd>{PRICE_KRW.toLocaleString('ko-KR')}원</dd></div>
-          <div className="rounded-xl bg-calm p-3"><dt className="font-bold">파일 제한</dt><dd>최대 {LIMITS.maxFilesPerCase}개 / 총 {LIMITS.maxTotalUploadMb}MB</dd></div>
-          <div className="rounded-xl bg-calm p-3"><dt className="font-bold">개별 제한</dt><dd>이미지·PDF {LIMITS.maxImageOrPdfMb}MB / 음성 {LIMITS.maxAudioMb}MB</dd></div>
-          <div className="rounded-xl bg-calm p-3"><dt className="font-bold">지원 형식</dt><dd>JPG, PNG, WebP, PDF, TXT, MP3, M4A, WAV, FLAC, WebM</dd></div>
-        </dl>
-        <div className="mt-5 rounded-2xl border border-amber-300 bg-amber-50 p-4">
-          자료가 너무 적거나 날짜·출처가 불분명하면 리포트 품질이 낮을 수 있습니다. 자료의 취득 경위, 제출 가능성, 법적 효력은 변호사에게 확인해야 합니다.
-        </div>
-        <button className="mt-6 rounded-xl bg-ink px-5 py-3 font-semibold text-white" onClick={createCase} disabled={loading}>{loading ? '생성 중…' : '안전 확인 후 업로드 시작'}</button>
+      <PageHero
+        title="상담자료 준비를 차분하게 시작합니다"
+        description="자료 타임라인과 리포트 생성을 위한 유료 흐름입니다. 결제 전 자료가 충분한지 확인하고, 민감자료 처리와 외부 분석 서비스 이용에 동의합니다."
+      >
+        <button className="button-primary" onClick={createCase} disabled={loading}>{loading ? '생성 중…' : '안전 확인 후 업로드 시작'}</button>
+        <SecondaryLink href="/pricing">가격·환불 확인</SecondaryLink>
+      </PageHero>
+
+      <ProductFlowPreview compact />
+
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {[
+          ['가격', `${PRICE_KRW.toLocaleString('ko-KR')}원`],
+          ['파일 제한', `최대 ${LIMITS.maxFilesPerCase}개 / 총 ${LIMITS.maxTotalUploadMb}MB`],
+          ['개별 제한', `이미지·PDF ${LIMITS.maxImageOrPdfMb}MB / 음성 ${LIMITS.maxAudioMb}MB`],
+          ['지원 형식', 'JPG, PNG, WebP, PDF, TXT, MP3, M4A, WAV, FLAC, WebM']
+        ].map(([title, body]) => (
+          <article key={title} className="surface-card">
+            <h2 className="font-black">{title}</h2>
+            <p className="mt-2 text-sm leading-6 text-muted">{body}</p>
+          </article>
+        ))}
       </section>
+
+      <div className="rounded-3xl border border-amber-200 bg-amber-50 p-5 leading-7 text-amber-950">
+        자료가 너무 적거나 날짜·출처가 불분명하면 리포트 품질이 낮을 수 있습니다. 자료의 취득 경위, 제출 가능성, 법적 효력은 변호사에게 확인해야 합니다.
+      </div>
     </div>
   );
 }

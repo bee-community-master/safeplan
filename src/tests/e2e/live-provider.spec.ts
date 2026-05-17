@@ -81,7 +81,8 @@ test('paid live provider e2e hits Mistral OCR and Groq STT without falling back 
     await card.getByRole('button', { name: '카드 저장' }).click();
   }
   await page.getByRole('button', { name: '리포트 생성으로 이동' }).click();
-  await page.getByRole('button', { name: '리포트 생성' }).click();
+  await expect(page).toHaveURL(/\/report$/);
+  await page.getByRole('button', { name: '리포트 생성', exact: true }).click();
   await expect(page.getByRole('status')).toContainText('리포트가 생성');
   await page.getByRole('button', { name: '보안 링크 생성' }).click();
   await expect(page.getByRole('status')).toContainText('보안 링크');

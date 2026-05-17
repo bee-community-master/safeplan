@@ -17,9 +17,9 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
   }
   if (resolved.status !== 'ok') {
     return (
-      <section className="rounded-3xl bg-white p-6 shadow-sm">
-        <h1 className="text-3xl font-bold">만료되었거나 폐기된 링크입니다</h1>
-        <p className="mt-3">리포트 내용은 노출되지 않습니다. 필요한 경우 소유자가 새 링크를 생성해야 합니다.</p>
+      <section className="surface-panel p-6 md:p-8">
+        <h1 className="text-3xl font-black">만료되었거나 폐기된 링크입니다</h1>
+        <p className="mt-3 leading-7 text-muted">리포트 내용은 노출되지 않습니다. 필요한 경우 소유자가 새 링크를 생성해야 합니다.</p>
       </section>
     );
   }

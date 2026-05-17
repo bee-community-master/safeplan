@@ -2,8 +2,39 @@
 @tailwind components;
 @tailwind utilities;
 
-:root { color-scheme: light; }
-body { margin: 0; background: #f6f3ee; color: #172026; }
+:root {
+  color-scheme: light;
+  --color-ink: #172026;
+  --color-muted: #5f6b66;
+  --color-calm: #f7f3ec;
+  --color-paper: #fffdf9;
+  --color-line: #e6ded2;
+  --color-teal: #00796d;
+  --color-teal-dark: #005c54;
+  --color-teal-soft: #e6f3f1;
+}
+
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(0, 121, 109, 0.12), transparent 30rem),
+    linear-gradient(180deg, #fffaf3 0%, var(--color-calm) 48%, #f4efe6 100%);
+  color: var(--color-ink);
+}
 a { color: inherit; }
 button, input, textarea, select { font: inherit; }
-.focus-ring:focus { outline: 3px solid #4f7b68; outline-offset: 2px; }
+::selection { background: rgba(0, 121, 109, 0.18); }
+.focus-ring:focus-visible { outline: 3px solid rgba(0, 121, 109, 0.35); outline-offset: 3px; }
+
+@layer components {
+  .surface-panel { @apply rounded-[2rem] border border-line/80 bg-paper/95 shadow-soft backdrop-blur; }
+  .surface-card { @apply rounded-[1.5rem] border border-line/80 bg-white/90 p-5 shadow-soft; }
+  .muted-panel { @apply rounded-3xl border border-line bg-calm p-5; }
+  .field-input { @apply mt-2 w-full rounded-2xl border border-line bg-white px-4 py-3 text-ink shadow-inner outline-none transition focus:border-teal focus:ring-4 focus:ring-teal/10; }
+  .button-primary { @apply rounded-2xl bg-teal px-5 py-3 font-bold text-white shadow-soft transition hover:-translate-y-0.5 hover:bg-tealDark focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-teal/25 disabled:cursor-not-allowed disabled:opacity-50; }
+  .button-secondary { @apply rounded-2xl border border-line bg-white px-5 py-3 font-bold text-teal transition hover:-translate-y-0.5 hover:border-teal/40 hover:bg-tealSoft focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-teal/25 disabled:cursor-not-allowed disabled:opacity-50; }
+  .button-danger { @apply rounded-2xl border border-red-200 bg-white px-5 py-3 font-bold text-red-800 transition hover:bg-red-50 focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-red-200 disabled:cursor-not-allowed disabled:opacity-50; }
+  .notice-safe { @apply rounded-3xl border border-red-200 bg-red-50 p-4 text-sm leading-6 text-red-950; }
+}

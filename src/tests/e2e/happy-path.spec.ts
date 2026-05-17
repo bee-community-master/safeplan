@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 test('safeplan local mock happy path', async ({ page, context }) => {
   await page.goto('/');
   await page.getByRole('button', { name: '안전합니다' }).click();
-  await page.getByRole('link', { name: '무료 시뮬레이터' }).click();
+  await page.getByRole('link', { name: '생존 시뮬레이터 시작' }).click();
   await expect(page.getByTestId('runway-stopped')).toContainText('0.5개월');
   await page.getByRole('link', { name: '자료 정리 흐름으로 이동' }).click();
   await page.getByRole('button', { name: '안전 확인 후 업로드 시작' }).click();
@@ -38,7 +38,8 @@ test('safeplan local mock happy path', async ({ page, context }) => {
     await card.getByRole('button', { name: '카드 저장' }).click();
   }
   await page.getByRole('button', { name: '리포트 생성으로 이동' }).click();
-  await page.getByRole('button', { name: '리포트 생성' }).click();
+  await expect(page).toHaveURL(/\/report$/);
+  await page.getByRole('button', { name: '리포트 생성', exact: true }).click();
   await expect(page.getByRole('status')).toContainText('리포트가 생성');
   await page.getByLabel('공유 링크 비밀번호').fill('safe-pass-123');
   await page.getByRole('button', { name: '보안 링크 생성' }).click();

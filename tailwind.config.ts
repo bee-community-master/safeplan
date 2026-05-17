@@ -6,9 +6,18 @@ const config: Config = {
     extend: {
       colors: {
         ink: '#172026',
-        calm: '#f6f3ee',
-        sage: '#dfe8df',
-        clay: '#b9765a'
+        muted: '#5f6b66',
+        calm: '#f7f3ec',
+        paper: '#fffdf9',
+        line: '#e6ded2',
+        teal: '#00796d',
+        tealDark: '#005c54',
+        tealSoft: '#e6f3f1',
+        sage: '#e6f3f1',
+        clay: '#00796d'
+      },
+      boxShadow: {
+        soft: '0 18px 50px rgba(23, 32, 38, 0.08)'
       }
     }
   },

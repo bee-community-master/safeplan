@@ -1,39 +1,29 @@
 import { SafetyPopup } from '@/components/SafetyPopup';
 import { SafetyNotice } from '@/components/SafetyNotice';
+import { GuardrailGrid, PageHero, PrimaryLink, ProductFlowPreview, RouteCards, SecondaryLink } from '@/components/DesignSystem';
 
 export default function LandingPage() {
   return (
     <div className="space-y-8">
       <SafetyPopup />
-      <section className="rounded-3xl bg-white p-8 shadow-sm">
-        <p className="text-sm font-semibold text-clay">한국어 B2C · 상담 전 자료 정리</p>
-        <h1 className="mt-3 text-4xl font-black tracking-tight">독립 준비, 생활 가능 기간 계산, 상담 전 자료 정리</h1>
-        <p className="mt-4 max-w-3xl text-lg leading-8 text-stone-700">
-          독립 세이프플랜은 재정 입력값을 서버에 저장하지 않는 생존 시뮬레이터와, 사용자가 확인한 자료만 리포트/보안 링크로 정리하는 서비스입니다. 법률 자문이나 이혼 결정, 승소 가능성 예측을 제공하지 않습니다.
-        </p>
-        <div className="mt-6 flex flex-wrap gap-3">
-          <a className="rounded-xl bg-ink px-5 py-3 font-semibold text-white" href="/safety">안전 확인 시작</a>
-          <a className="rounded-xl border border-stone-300 px-5 py-3 font-semibold" href="/simulator">무료 시뮬레이터</a>
-          <a className="rounded-xl border border-stone-300 px-5 py-3 font-semibold" href="/pricing">가격 확인</a>
-        </div>
+      <section className="grid items-stretch gap-6 lg:grid-cols-[0.95fr_1.05fr]">
+        <PageHero
+          title="지금의 선택이 내일의 안전을 만듭니다"
+          description="독립 세이프플랜은 재정 입력값을 서버에 저장하지 않는 생존 시뮬레이터와, 사용자가 확인한 자료만 리포트와 보안 링크로 정리하는 서비스입니다."
+        >
+          <PrimaryLink href="/simulator">생존 시뮬레이터 시작</PrimaryLink>
+          <SecondaryLink href="/evidence/start">자료 정리 시작</SecondaryLink>
+        </PageHero>
+        <ProductFlowPreview />
       </section>
+
       <SafetyNotice />
-      <section className="grid gap-4 md:grid-cols-3">
-        {['0.5개월 단위 보수적 계산', '자료 단위 자동 정리 초안', '14일 만료 보안 링크'].map((item) => (
-          <div key={item} className="rounded-2xl bg-white p-5 shadow-sm"><h2 className="font-bold">{item}</h2><p className="mt-2 text-sm leading-6 text-stone-600">안전·프라이버시·사용자 확인을 기본값으로 둡니다.</p></div>
-        ))}
-      </section>
-      <section className="rounded-3xl bg-white p-6 shadow-sm">
-        <h2 className="text-2xl font-bold">어떻게 진행되나요?</h2>
-        <ol className="mt-4 grid gap-3 md:grid-cols-4">
-          {['안전 확인', '생활 가능 기간 계산', '자료 업로드와 동의', '사용자 확인 후 리포트 생성'].map((step, index) => (
-            <li key={step} className="rounded-2xl bg-calm p-4">
-              <span className="text-sm font-bold text-clay">STEP {index + 1}</span>
-              <p className="mt-2 font-semibold">{step}</p>
-            </li>
-          ))}
-        </ol>
-        <p className="mt-4 text-sm leading-6 text-stone-700">자료 정리는 “상담자료 준비”를 돕기 위한 초안 생성 흐름이며, 사용자가 확인하지 않은 내용은 리포트에 포함하지 않습니다.</p>
+      <GuardrailGrid />
+
+      <section className="surface-panel p-6 md:p-8">
+        <h2 className="text-2xl font-black tracking-tight">한 번에 이어지는 준비 흐름</h2>
+        <p className="mt-3 max-w-3xl leading-7 text-muted">무료 계산으로 현재 생활 가능 기간을 확인하고, 필요한 경우 자료 업로드·동의·결제·검토·리포트 생성까지 이어갑니다. 자료 정리는 상담자료 준비를 돕는 초안 생성 흐름입니다.</p>
+        <div className="mt-6"><RouteCards /></div>
       </section>
     </div>
   );

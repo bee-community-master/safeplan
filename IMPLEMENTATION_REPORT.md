@@ -57,6 +57,11 @@
   - 전역 네비게이션/푸터에 법적 고지, 개인정보, 환불, 상태 링크 추가
   - 공개 페이지는 검색 허용, 민감한 evidence/share/account/API 경로는 robots/noindex로 보호
   - 삭제 전 확인 체크박스 추가로 실수 삭제 방지
+- Production 디자인/라우팅 정리
+  - Build Web Apps 기준으로 생성한 디자인 컨셉을 바탕으로 warm stone 배경, white surface, deep charcoal text, muted teal accent 중심의 4색 UI 시스템 적용
+  - `DesignSystem` 컴포넌트로 브랜드 마크, CTA, 페이지 히어로, 제품 흐름, guardrail 카드, 주요 라우트 카드 재사용
+  - landing, safety, simulator, evidence start/upload/review/report, pricing, help, status, legal/share/account 화면의 여백·카드·버튼·입력 스타일 통일
+  - production favicon 추가 및 Browser/Playwright desktop+mobile visual QA 수행
 - Production runtime hardening
   - `SAFEPLAN_DB_BACKEND=prisma` normalized `safeplan_*` PostgreSQL persistence
   - `STORAGE_PROVIDER=gcs` private object adapter for originals/reports
@@ -81,6 +86,7 @@
 pnpm lint && pnpm test && pnpm build && pnpm e2e && pnpm e2e:live
 docker build -t safeplan:production-hardening .
 docker build -t safeplan:production-ux .
+docker build -t safeplan:production-design .
 ```
 
 결과:
@@ -92,6 +98,7 @@ docker build -t safeplan:production-ux .
 - `pnpm e2e:live`: 통과 — Playwright Chromium live provider full path 1 passed
 - `docker build -t safeplan:production-hardening .`: 통과 — Prisma generate + Next production build 포함
 - `docker build -t safeplan:production-ux .`: 통과 — production UX 보강 후 Next production build 29 static pages 포함
+- `docker build -t safeplan:production-design .`: 통과 — 디자인/라우팅 정리 후 Next production build 29 static pages 포함
 
 추가 수행:
 
@@ -121,6 +128,7 @@ pnpm e2e:live
 - Local live E2E는 외부 AI 비용 검증에 초점을 맞춰 `PAYMENT_PROVIDER=mock`으로 유지했다. Toss 결제 redirect/confirm 구현은 운영 credential 연결 후 별도 smoke가 필요하다.
 - 사용자 문구 정리 후에도 live E2E를 재실행해 변경된 동의/결제/자료 정리/공유/삭제 레이블로 전체 흐름이 깨지지 않음을 확인했다.
 - Production 사용자 표면 보강 후 Playwright happy path에서 비밀번호 보호 공유 링크 열기와 삭제 전 확인 UX를 함께 검증했다.
+- 디자인 컨셉과 구현 화면을 `view_image`로 확인했고, Browser/Playwright에서 desktop 1440px 및 mobile 390px 렌더링을 점검했다.
 
 ## Provider mode
 

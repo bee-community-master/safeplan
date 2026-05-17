@@ -182,17 +182,17 @@ export function EvidenceUploadFlow({ caseId }: { caseId: string }) {
   }
 
   return (
-    <section className="rounded-3xl bg-white p-6 shadow-sm">
-      <h1 className="text-3xl font-bold">자료 업로드 · 동의 · 결제</h1>
-      <p className="mt-3 whitespace-pre-line text-sm leading-6 text-stone-700">{LEGAL_CAUTION_COPY}</p>
-      <div className="mt-5 rounded-2xl border border-amber-300 bg-amber-50 p-4">자료 부족 시 리포트 품질이 낮을 수 있습니다. 결제 전 파일 수, 날짜, 출처 메모를 확인하세요.</div>
+    <section className="surface-panel p-6 md:p-8">
+      <h1 className="text-3xl font-black">자료 업로드 · 동의 · 결제</h1>
+      <p className="mt-3 whitespace-pre-line text-sm leading-6 text-muted">{LEGAL_CAUTION_COPY}</p>
+      <div className="mt-5 rounded-3xl border border-amber-200 bg-amber-50 p-5 leading-7 text-amber-950">자료 부족 시 리포트 품질이 낮을 수 있습니다. 결제 전 파일 수, 날짜, 출처 메모를 확인하세요.</div>
       <label className="mt-6 block font-semibold">
         증거 정리 자료 선택
-        <input data-testid="file-input" className="mt-2 block w-full rounded-xl border p-3" type="file" multiple accept="image/jpeg,image/png,image/webp,application/pdf,text/plain,audio/mpeg,audio/mp4,audio/wav,audio/flac,audio/webm" onChange={(event) => setFiles(event.currentTarget.files)} />
+        <input data-testid="file-input" className="field-input" type="file" multiple accept="image/jpeg,image/png,image/webp,application/pdf,text/plain,audio/mpeg,audio/mp4,audio/wav,audio/flac,audio/webm" onChange={(event) => setFiles(event.currentTarget.files)} />
       </label>
-      <button className="mt-4 rounded-xl bg-ink px-5 py-3 font-semibold text-white" onClick={() => run(upload)}>암호화 업로드 완료</button>
+      <button className="button-primary mt-4" onClick={() => run(upload)}>암호화 업로드 완료</button>
 
-      <fieldset className="mt-8 space-y-3 rounded-2xl border border-stone-200 p-4">
+      <fieldset className="mt-8 space-y-3 rounded-3xl border border-line bg-white/80 p-5">
         <legend className="px-2 font-bold">자료 정리 전 명시 동의</legend>
         {[
           ['sensitive', '민감정보 처리에 동의합니다.'],
@@ -205,15 +205,15 @@ export function EvidenceUploadFlow({ caseId }: { caseId: string }) {
             <input type="checkbox" checked={consents[key as keyof typeof consents]} onChange={(event) => { const checked = event.currentTarget.checked; setConsents((prev) => ({ ...prev, [key]: checked })); }} /> {label}
           </label>
         ))}
-        <button className="rounded-xl border px-4 py-2 font-semibold disabled:opacity-50" disabled={!allConsents || stage === 'idle'} onClick={() => run(acceptConsents)}>동의 기록</button>
+        <button className="button-secondary px-4 py-2" disabled={!allConsents || stage === 'idle'} onClick={() => run(acceptConsents)}>동의 기록</button>
       </fieldset>
 
       <div className="mt-6 flex flex-wrap gap-3">
-        <button className="rounded-xl bg-clay px-5 py-3 font-semibold text-white disabled:opacity-50" disabled={stage !== 'consented'} onClick={() => run(pay)}>9,900원 결제</button>
-        <button className="rounded-xl bg-emerald-700 px-5 py-3 font-semibold text-white disabled:opacity-50" disabled={stage !== 'paid'} onClick={() => run(process)}>자료 정리 시작</button>
+        <button className="button-primary" disabled={stage !== 'consented'} onClick={() => run(pay)}>9,900원 결제</button>
+        <button className="button-primary" disabled={stage !== 'paid'} onClick={() => run(process)}>자료 정리 시작</button>
       </div>
-      {paymentId && <p className="mt-2 text-xs text-stone-500">결제 접수가 확인되었습니다.</p>}
-      {message && <p className="mt-4 rounded-xl bg-calm p-3" role="status">{message}</p>}
+      {paymentId && <p className="mt-3 text-xs text-muted">결제 접수가 확인되었습니다.</p>}
+      {message && <p className="mt-4 rounded-2xl bg-tealSoft p-4 text-tealDark" role="status">{message}</p>}
     </section>
   );
 }
