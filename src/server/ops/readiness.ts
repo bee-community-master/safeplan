@@ -69,9 +69,9 @@ export function productionReadiness(): ReadinessReport {
   });
   add(checks, {
     name: 'payment_provider',
-    ok: !production || (process.env.PAYMENT_PROVIDER === 'toss' && present('TOSS_CLIENT_KEY') && present('TOSS_SECRET_KEY') && present('TOSS_WEBHOOK_SECRET')),
+    ok: !production || (process.env.PAYMENT_PROVIDER === 'toss' && present('TOSS_CLIENT_KEY') && present('TOSS_SECRET_KEY')),
     severity: 'blocker',
-    detail: 'Production payment must use Toss credentials; mock payment is local/test only.'
+    detail: 'Production payment must use Toss client/server credentials; mock payment is local/test only.'
   });
   add(checks, {
     name: 'public_support_channel',

@@ -25,8 +25,6 @@ const USER_SAFE_ERRORS: Record<string, string> = {
   production_payment_provider_required: '결제 준비가 완료되지 않았습니다. 잠시 후 다시 시도해 주세요.',
   toss_confirm_failed: '결제 승인을 완료하지 못했습니다. 결제 상태를 확인한 뒤 다시 시도해 주세요.',
   toss_retrieve_failed: '결제 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.',
-  toss_webhook_secret_missing: '요청 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.',
-  toss_webhook_signature_invalid: '요청 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.',
   no_confirmed_cards: '리포트에 포함할 자료를 먼저 확인해 주세요.',
   report_input_changed: '자료가 변경되었습니다. 카드 확인 후 리포트를 다시 생성해 주세요.',
   share_not_owned: '이 공유 링크를 변경할 권한을 확인할 수 없습니다.',

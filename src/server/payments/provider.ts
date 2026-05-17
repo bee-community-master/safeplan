@@ -5,7 +5,7 @@ import { isProductionApp } from '@/lib/runtime';
 import { appUrl } from '@/lib/url';
 import type { PaymentIntentRecord } from '@/server/db/types';
 import { readDb, updateDb } from '@/server/db/local-store';
-import { hmacSha256Hex, id, timingSafeHexEqual } from '@/server/security/crypto';
+import { id } from '@/server/security/crypto';
 
 export interface PaymentIntentResult {
   paymentId: string;
@@ -34,34 +34,6 @@ export interface TossConfirmInput {
   paymentKey: string;
   orderId: string;
   amount: number;
-}
-
-const TOSS_WEBHOOK_TOLERANCE_MS = 5 * 60 * 1000;
-
-function tossWebhookSecret(): string {
-  const secret = process.env.TOSS_WEBHOOK_SECRET;
-  if (!secret) throw new Error('toss_webhook_secret_missing');
-  return secret;
-}
-
-function parseTossSignature(signatureHeader: string | null): string[] {
-  if (!signatureHeader) return [];
-  return signatureHeader
-    .split(',')
-    .map((part) => part.trim())
-    .filter((part) => part.startsWith('v1='))
-    .map((part) => part.slice(3));
-}
-
-export function verifyTossWebhookSignature(input: { rawBody: string; signatureHeader: string | null; timestampHeader: string | null; now?: Date }): void {
-  const timestamp = Number(input.timestampHeader);
-  if (!Number.isFinite(timestamp)) throw new Error('toss_webhook_signature_invalid');
-  const nowMs = input.now?.getTime() ?? Date.now();
-  const timestampMs = timestamp < 10_000_000_000 ? timestamp * 1000 : timestamp;
-  if (Math.abs(nowMs - timestampMs) > TOSS_WEBHOOK_TOLERANCE_MS) throw new Error('toss_webhook_signature_invalid');
-  const expected = hmacSha256Hex(tossWebhookSecret(), `${input.timestampHeader}.${input.rawBody}`);
-  const signatures = parseTossSignature(input.signatureHeader);
-  if (!signatures.some((signature) => timingSafeHexEqual(expected, signature))) throw new Error('toss_webhook_signature_invalid');
 }
 
 export function paymentProvider(): 'mock' | 'toss' {

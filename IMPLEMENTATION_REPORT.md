@@ -20,7 +20,7 @@
   - 민감정보, 원본 자료, 외부 AI/OCR/STT, 해외/제3자 처리, 결제 동의 기록
   - IP/User-Agent 해시 저장
   - 9,900원 mock payment full path
-  - Toss checkout SDK redirect + server-side confirm API + webhook retrieve-verify handler
+  - Toss v2 Standard SDK redirect + server-side confirm API + webhook retrieve-verify handler
 - AI pipeline
   - Mistral OCR adapter: `src/server/ai/providers/mistral-ocr.ts`
   - Groq STT adapter: `src/server/ai/providers/groq-stt.ts`
@@ -137,7 +137,7 @@ pnpm e2e:live
 `$code-review` 병렬 리뷰 결과 주요 HIGH/MEDIUM 이슈를 반영했다.
 
 - 업로드 저장은 client가 보낸 `sizeBytes`가 아니라 실제 base64 decode byte 길이로 검증·저장한다.
-- Toss webhook은 `x-toss-timestamp` + raw body HMAC(`x-toss-signature`, `v1=`) 검증을 통과한 요청만 처리한다.
+- Toss 일반 결제 webhook은 서명 헤더를 가정하지 않고 server-side retrieve API로 재조회한 뒤 orderId, 금액, DONE 상태를 확인한 경우에만 처리한다.
 - Evidence upload client를 동의 체크리스트와 client helper로 분리하고, 지원 MIME 타입은 공통 상수에서 사용한다.
 - 공유 리포트 payload 생성 로직을 단일 server service로 통합했다.
 - Review card client는 persistence record 대신 explicit DTO를 사용한다.
@@ -227,7 +227,6 @@ pnpm e2e:live
   - `PAYMENT_PROVIDER=toss`
   - `TOSS_CLIENT_KEY`
   - `TOSS_SECRET_KEY`
-  - `TOSS_WEBHOOK_SECRET`
 
 키가 없거나 provider 호출이 실패하면 mock fallback을 사용하고 처리 상태/작업 상태에 degraded 정보를 남긴다.
 
@@ -263,7 +262,6 @@ pnpm e2e:live
 - `PAYMENT_PROVIDER`
 - `TOSS_CLIENT_KEY`
 - `TOSS_SECRET_KEY`
-- `TOSS_WEBHOOK_SECRET`
 - `AI_PROVIDER_MODE`
 - `MISTRAL_API_KEY`
 - `GROQ_API_KEY`

@@ -1,4 +1,15 @@
-type TossPaymentClient = { requestPayment: (method: string, options: Record<string, unknown>) => Promise<void> };
+type TossStandardPayment = {
+  requestPayment: (options: {
+    method: 'CARD';
+    amount: { currency: 'KRW'; value: number };
+    orderId: string;
+    orderName: string;
+    successUrl: string;
+    failUrl: string;
+  }) => Promise<void>;
+};
+
+type TossPaymentClient = { payment: (options: { customerKey: 'ANONYMOUS' }) => TossStandardPayment };
 
 export type PaymentProvider = 'mock' | 'toss';
 
@@ -64,11 +75,27 @@ export function loadTossPayments(): Promise<void> {
       return;
     }
     const script = document.createElement('script');
-    script.src = 'https://js.tosspayments.com/v1/payment';
+    script.src = 'https://js.tosspayments.com/v2/standard';
     script.async = true;
     script.dataset.safeplanToss = 'true';
     script.onload = () => resolve();
     script.onerror = () => reject(new Error('toss_sdk_load_failed'));
     document.head.appendChild(script);
   });
+}
+
+export async function requestTossStandardPayment(payment: PaymentCreateResponse['payment']): Promise<void> {
+  if (!payment.clientKey || !payment.orderId || !payment.successUrl || !payment.failUrl) throw new Error('결제 준비가 완료되지 않았습니다. 잠시 후 다시 시도해 주세요.');
+  await loadTossPayments();
+  if (!window.TossPayments) throw new Error('결제창을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.');
+  await window.TossPayments(payment.clientKey)
+    .payment({ customerKey: 'ANONYMOUS' })
+    .requestPayment({
+      method: 'CARD',
+      amount: { currency: 'KRW', value: payment.amountKrw },
+      orderId: payment.orderId,
+      orderName: payment.orderName || '독립 세이프플랜 자료 정리 리포트',
+      successUrl: payment.successUrl,
+      failUrl: payment.failUrl
+    });
 }

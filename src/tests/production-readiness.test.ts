@@ -44,7 +44,6 @@ describe('production readiness gates', () => {
     vi.stubEnv('PAYMENT_PROVIDER', 'toss');
     vi.stubEnv('TOSS_CLIENT_KEY', 'client');
     vi.stubEnv('TOSS_SECRET_KEY', 'secret');
-    vi.stubEnv('TOSS_WEBHOOK_SECRET', 'webhook');
     vi.stubEnv('NEXT_PUBLIC_SUPPORT_EMAIL', 'support@safeplan.example.com');
 
     expect(productionReadiness().ready).toBe(true);

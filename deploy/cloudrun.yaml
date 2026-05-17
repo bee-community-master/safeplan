@@ -101,11 +101,6 @@ spec:
                 secretKeyRef:
                   name: safeplan-toss-secret-key
                   key: latest
-            - name: TOSS_WEBHOOK_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: safeplan-toss-webhook-secret
-                  key: latest
             - name: KMS_KEY_NAME
               valueFrom:
                 secretKeyRef:

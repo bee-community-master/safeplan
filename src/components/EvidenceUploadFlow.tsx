@@ -6,7 +6,7 @@ import { CURRENT_CONSENT_VERSION } from '@/lib/consent';
 import { LEGAL_CAUTION_COPY, SUPPORTED_MIME_TYPES } from '@/lib/constants';
 import { validateUploadCandidates } from '@/lib/evidence';
 import { EvidenceConsentChecklist, INITIAL_CONSENTS, type ConsentState } from './EvidenceConsentChecklist';
-import { expectJson, friendlyClientError, loadTossPayments, uploadPayload, type PaymentCreateResponse } from './evidence-upload-client';
+import { expectJson, friendlyClientError, requestTossStandardPayment, uploadPayload, type PaymentCreateResponse } from './evidence-upload-client';
 
 type Stage = 'idle' | 'uploaded' | 'consented' | 'paid' | 'processed';
 export function EvidenceUploadFlow({ caseId }: { caseId: string }) {
@@ -101,16 +101,7 @@ export function EvidenceUploadFlow({ caseId }: { caseId: string }) {
   }
 
   async function requestTossPayment(payment: PaymentCreateResponse['payment']) {
-    if (!payment.clientKey || !payment.orderId || !payment.successUrl || !payment.failUrl) throw new Error('결제 준비가 완료되지 않았습니다. 잠시 후 다시 시도해 주세요.');
-    await loadTossPayments();
-    if (!window.TossPayments) throw new Error('결제창을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.');
-    await window.TossPayments(payment.clientKey).requestPayment('카드', {
-      amount: payment.amountKrw,
-      orderId: payment.orderId,
-      orderName: payment.orderName || '독립 세이프플랜 자료 정리 리포트',
-      successUrl: payment.successUrl,
-      failUrl: payment.failUrl
-    });
+    await requestTossStandardPayment(payment);
   }
 
   async function processEvidence() {

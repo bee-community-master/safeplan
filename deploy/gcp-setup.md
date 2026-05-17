@@ -77,7 +77,7 @@ for name in \
   safeplan-database-url safeplan-session-secret safeplan-next-public-app-url \
   safeplan-next-public-support-email \
   safeplan-mistral-api-key safeplan-groq-api-key safeplan-baseten-api-key safeplan-baseten-classifier-url \
-  safeplan-toss-client-key safeplan-toss-secret-key safeplan-toss-webhook-secret safeplan-kms-key-name \
+  safeplan-toss-client-key safeplan-toss-secret-key safeplan-kms-key-name \
   safeplan-envelope-master-key; do
   printf "REPLACE_ME" | gcloud secrets create "$name" --data-file=- || true
 done
@@ -139,7 +139,7 @@ gcloud run services update-traffic safeplan-web --region="$GCP_REGION" --to-revi
 ## 11. 운영 smoke checklist
 
 - `/api/health/ready`가 200을 반환해야 합니다.
-- Toss 콘솔 success/fail URL과 webhook endpoint를 운영 도메인 기준으로 등록합니다.
+- Toss 콘솔 success/fail URL과 webhook endpoint를 운영 도메인 기준으로 등록합니다. 일반 결제 webhook은 수신 후 Toss retrieve API로 재조회해 검증합니다.
 - Baseten classifier URL을 설정한 뒤 live E2E에서 `classification:baseten`을 확인합니다.
 - GCS originals/reports 객체가 private 상태로 생성/삭제되는지 확인합니다.
 
