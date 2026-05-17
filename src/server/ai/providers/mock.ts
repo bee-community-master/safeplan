@@ -2,6 +2,7 @@ import 'server-only';
 import { AI_TAGS } from '@/lib/constants';
 import { extractDateCandidateFromText, isVisualEvidence } from '@/lib/evidence-date';
 import type { BasetenClassifierInput, BasetenClassifierResponse, MaterialType } from '@/lib/types';
+import type { ImageDescriptionInput, ImageDescriptionResult } from './baseten-image-description';
 
 export async function mockOcr(input: { originalName: string; mimeType: string; content: Buffer }): Promise<{ markdown: string; raw: unknown }> {
   const text = input.mimeType === 'text/plain' ? input.content.toString('utf8') : '';
@@ -14,6 +15,20 @@ export async function mockOcr(input: { originalName: string; mimeType: string; c
 export async function mockStt(input: { originalName: string }): Promise<{ transcript: string; raw: unknown }> {
   const transcript = `A: ${input.originalName}에서 추출한 음성 전사 초안입니다.\nB: 실제 판단이 아니라 사용자가 확인해야 하는 자료 정리용 텍스트입니다.`;
   return { transcript, raw: { provider: 'mock', transcript, degraded: false } };
+}
+
+export async function mockDescribeImage(input: Pick<ImageDescriptionInput, 'originalName' | 'materialType' | 'userMemo'>): Promise<ImageDescriptionResult> {
+  const memo = input.userMemo?.trim();
+  const descriptionKo = [
+    `${input.originalName}은 문서/표/캡처로 분류되지 않은 일반 사진 자료입니다.`,
+    '사진 속 구체적 인물, 장소, 상황은 사용자가 원본을 보며 확인해야 하며 법적 판단이나 효력 판단을 포함하지 않습니다.',
+    memo ? `사용자 메모 참고: ${memo.slice(0, 160)}${memo.length > 160 ? '…' : ''}` : null
+  ].filter(Boolean).join(' ');
+  return {
+    descriptionKo,
+    confidence: 0.52,
+    raw: { provider: 'mock', descriptionKo, materialType: input.materialType, degraded: false }
+  };
 }
 
 function detectTag(text: string): (typeof AI_TAGS)[number] {
@@ -60,7 +75,7 @@ function mockDateCandidates(input: BasetenClassifierInput): BasetenClassifierRes
 }
 
 export async function mockClassify(input: BasetenClassifierInput): Promise<BasetenClassifierResponse> {
-  const normalized = [input.ocrMarkdown, input.transcript, input.userMemo].filter(Boolean).join('\n');
+  const normalized = [input.ocrMarkdown, input.transcript, input.imageDescriptionKo, input.userMemo].filter(Boolean).join('\n');
   const tag = detectTag(normalized || input.fileMetadata.originalName);
   const confidenceLevel = normalized.length > 30 ? 4 : 3;
   return {
@@ -68,6 +83,7 @@ export async function mockClassify(input: BasetenClassifierInput): Promise<Baset
     summaryKo: normalized
       ? `자동 정리 초안: ${normalized.slice(0, 220)}${normalized.length > 220 ? '…' : ''}`
       : '자동 정리 초안: 파일명과 기본 정보를 기준으로 생성한 검토 필요 자료입니다.',
+    imageDescriptionKo: input.imageDescriptionKo,
     materialType: input.materialType as MaterialType,
     dateCandidates: mockDateCandidates(input),
     people: [{ label: '미상', rawMention: '자료 내 인물', confidence: 0.3 }],

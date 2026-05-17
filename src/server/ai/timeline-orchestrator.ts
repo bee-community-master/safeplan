@@ -2,6 +2,7 @@ import 'server-only';
 import { CURRENT_CONSENT_VERSION, REQUIRED_AI_CONSENT_TYPES, hasCurrentConsents } from '@/lib/consent';
 import { AI_TAGS } from '@/lib/constants';
 import { chooseFileDateCandidate, extractDateCandidateFromFileName, isVisualEvidence, sanitizeEvidenceDateCandidates } from '@/lib/evidence-date';
+import { chooseImageAnalysisMode } from '@/lib/image-analysis';
 import { isRealAiProviderMode } from '@/lib/runtime';
 import type { BasetenClassifierResponse } from '@/lib/types';
 import type { EvidenceFileRecord, ProcessingJobRecord } from '@/server/db/types';
@@ -11,9 +12,10 @@ import { readEvidencePlain } from '@/server/files/local';
 import { extractCaptureDateFromImageMetadata } from '@/server/files/photo-date';
 import { id } from '@/server/security/crypto';
 import { basetenClassify } from './providers/baseten-classifier';
+import { basetenDescribeImage } from './providers/baseten-image-description';
 import { groqStt } from './providers/groq-stt';
 import { mistralOcr } from './providers/mistral-ocr';
-import { mockClassify, mockOcr, mockStt } from './providers/mock';
+import { mockClassify, mockDescribeImage, mockOcr, mockStt } from './providers/mock';
 import { isProviderMissingCredentialError } from './providers/schema';
 
 const CLASSIFIER_GUARDRAIL_POLICY =
@@ -46,35 +48,61 @@ async function classifyWithFallback(input: Parameters<typeof mockClassify>[0]): 
   return { result, provider: 'mock', degraded: isRealAiProviderMode(), raw: result };
 }
 
-async function extractText(file: EvidenceFileRecord): Promise<{ ocrMarkdown: string | null; transcript: string | null; degraded: boolean; captureDateMetadata: ReturnType<typeof extractCaptureDateFromImageMetadata>; extractionRaw: Array<{ provider: 'mistral' | 'groq' | 'mock'; kind: 'ocr' | 'stt'; raw: unknown; text: string }> }> {
+async function describeImageWithFallback(file: EvidenceFileRecord, content: Buffer): Promise<{ descriptionKo: string; degraded: boolean; provider: 'baseten' | 'mock'; confidence: number }> {
+  if (isRealAiProviderMode()) {
+    try {
+      const result = await basetenDescribeImage({ content, mimeType: file.mimeType, originalName: file.originalName, materialType: file.materialType, userMemo: file.userMemo });
+      return { descriptionKo: result.descriptionKo, degraded: false, provider: 'baseten', confidence: result.confidence };
+    } catch (error) {
+      warnProviderDegraded('baseten', error);
+    }
+  }
+  const result = await mockDescribeImage({ originalName: file.originalName, materialType: file.materialType, userMemo: file.userMemo });
+  return { descriptionKo: result.descriptionKo, degraded: isRealAiProviderMode(), provider: 'mock', confidence: result.confidence };
+}
+
+async function extractText(file: EvidenceFileRecord): Promise<{ ocrMarkdown: string | null; transcript: string | null; imageDescriptionKo: string | null; imageAnalysisMode: 'ocr' | 'description' | 'not_image'; degraded: boolean; captureDateMetadata: ReturnType<typeof extractCaptureDateFromImageMetadata>; extractionRaw: Array<{ provider: 'mistral' | 'groq' | 'baseten' | 'mock'; kind: 'ocr' | 'stt' | 'image_description'; raw: unknown; text: string }> }> {
   const content = await readEvidencePlain(file);
   const captureDateMetadata = extractCaptureDateFromImageMetadata({ content, mimeType: file.mimeType });
+  const imageAnalysisMode = chooseImageAnalysisMode({ mimeType: file.mimeType, materialType: file.materialType, originalName: file.originalName });
   if (file.mimeType === 'text/plain') {
     const text = content.toString('utf8');
-    return { ocrMarkdown: text, transcript: null, degraded: false, captureDateMetadata, extractionRaw: [{ provider: 'mock', kind: 'ocr', raw: { textMode: true }, text }] };
+    return { ocrMarkdown: text, transcript: null, imageDescriptionKo: null, imageAnalysisMode: 'not_image', degraded: false, captureDateMetadata, extractionRaw: [{ provider: 'mock', kind: 'ocr', raw: { textMode: true }, text }] };
   }
   if (file.mimeType.startsWith('audio/')) {
     if (isRealAiProviderMode()) {
       try {
         const result = await groqStt({ content, mimeType: file.mimeType, originalName: file.originalName });
-        return { ocrMarkdown: null, transcript: result.transcript, degraded: false, captureDateMetadata, extractionRaw: [{ provider: 'groq', kind: 'stt', raw: result.raw, text: result.transcript }] };
+        return { ocrMarkdown: null, transcript: result.transcript, imageDescriptionKo: null, imageAnalysisMode: 'not_image', degraded: false, captureDateMetadata, extractionRaw: [{ provider: 'groq', kind: 'stt', raw: result.raw, text: result.transcript }] };
       } catch (error) {
         warnProviderDegraded('groq', error);
       }
     }
     const mock = await mockStt({ originalName: file.originalName });
-    return { ocrMarkdown: null, transcript: mock.transcript, degraded: isRealAiProviderMode(), captureDateMetadata, extractionRaw: [{ provider: 'mock', kind: 'stt', raw: mock.raw, text: mock.transcript }] };
+    return { ocrMarkdown: null, transcript: mock.transcript, imageDescriptionKo: null, imageAnalysisMode: 'not_image', degraded: isRealAiProviderMode(), captureDateMetadata, extractionRaw: [{ provider: 'mock', kind: 'stt', raw: mock.raw, text: mock.transcript }] };
+  }
+  if (imageAnalysisMode === 'description') {
+    const description = await describeImageWithFallback(file, content);
+    return {
+      ocrMarkdown: null,
+      transcript: null,
+      imageDescriptionKo: description.descriptionKo,
+      imageAnalysisMode,
+      degraded: description.degraded,
+      captureDateMetadata,
+      extractionRaw: [{ provider: description.provider, kind: 'image_description', raw: { provider: description.provider, confidence: description.confidence, degraded: description.degraded }, text: description.descriptionKo }]
+    };
   }
   if (isRealAiProviderMode()) {
     try {
       const result = await mistralOcr({ content, mimeType: file.mimeType, originalName: file.originalName });
-      return { ocrMarkdown: result.markdown, transcript: null, degraded: false, captureDateMetadata, extractionRaw: [{ provider: 'mistral', kind: 'ocr', raw: result.raw, text: result.markdown }] };
+      return { ocrMarkdown: result.markdown, transcript: null, imageDescriptionKo: null, imageAnalysisMode: imageAnalysisMode ?? 'not_image', degraded: false, captureDateMetadata, extractionRaw: [{ provider: 'mistral', kind: 'ocr', raw: result.raw, text: result.markdown }] };
     } catch (error) {
       warnProviderDegraded('mistral', error);
     }
   }
   const mock = await mockOcr({ content, mimeType: file.mimeType, originalName: file.originalName });
-  return { ocrMarkdown: mock.markdown, transcript: null, degraded: isRealAiProviderMode(), captureDateMetadata, extractionRaw: [{ provider: 'mock', kind: 'ocr', raw: mock.raw, text: mock.markdown }] };
+  return { ocrMarkdown: mock.markdown, transcript: null, imageDescriptionKo: null, imageAnalysisMode: imageAnalysisMode ?? 'not_image', degraded: isRealAiProviderMode(), captureDateMetadata, extractionRaw: [{ provider: 'mock', kind: 'ocr', raw: mock.raw, text: mock.markdown }] };
 }
 
 export async function enqueueProcessingJob(caseId: string): Promise<ProcessingJobRecord> {
@@ -154,13 +182,15 @@ export async function processCaseTimeline(caseId: string): Promise<{ job: Proces
       materialType: file.materialType,
       ocrMarkdown: extracted.ocrMarkdown,
       transcript: extracted.transcript,
+      imageDescriptionKo: extracted.imageDescriptionKo,
       userMemo: file.userMemo,
       fileMetadata: {
         originalName: file.originalName,
         mimeType: file.mimeType,
         uploadedAt: file.uploadedAt,
         captureDateCandidate,
-        dateInferencePolicy: isVisualEvidence(file) ? 'visual_capture_date_from_title_or_metadata_only' : 'standard'
+        dateInferencePolicy: isVisualEvidence(file) ? 'visual_capture_date_from_title_or_metadata_only' : 'standard',
+        imageAnalysisMode: extracted.imageAnalysisMode
       },
       allowedTags: AI_TAGS
     });
@@ -170,7 +200,7 @@ export async function processCaseTimeline(caseId: string): Promise<{ job: Proces
       fileDateCandidate: captureDateCandidate,
       context: { originalName: file.originalName, mimeType: file.mimeType, materialType: file.materialType, uploadedAt: file.uploadedAt }
     });
-    const classificationResult = { ...classification.result, dateCandidates };
+    const classificationResult = { ...classification.result, imageDescriptionKo: classification.result.imageDescriptionKo ?? extracted.imageDescriptionKo, dateCandidates };
     const now = new Date().toISOString();
     const created = await updateDb((db) => {
       const activeCase = db.cases.find((item) => item.id === caseId && item.deletedAt === null);

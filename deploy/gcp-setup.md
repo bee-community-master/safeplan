@@ -77,6 +77,7 @@ for name in \
   safeplan-database-url safeplan-session-secret safeplan-next-public-app-url \
   safeplan-next-public-support-email \
   safeplan-mistral-api-key safeplan-groq-api-key safeplan-baseten-api-key safeplan-baseten-classifier-url \
+  safeplan-baseten-image-description-url \
   safeplan-toss-client-key safeplan-toss-secret-key safeplan-kms-key-name \
   safeplan-envelope-master-key; do
   printf "REPLACE_ME" | gcloud secrets create "$name" --data-file=- || true
@@ -89,7 +90,7 @@ Envelope master key 예시 생성:
 openssl rand -base64 32 | gcloud secrets create safeplan-envelope-master-key --data-file=- || true
 ```
 
-필수 환경변수는 `.env.example`을 기준으로 합니다. production은 `APP_ENV=production`, `SAFEPLAN_DB_BACKEND=prisma`, `STORAGE_PROVIDER=gcs`로 실행합니다. 실제 provider 운영에는 `MISTRAL_API_KEY`, `GROQ_API_KEY`, `BASETEN_API_KEY`, `BASETEN_CLASSIFIER_URL`, Toss 키, `DATABASE_URL`, `SESSION_SECRET`, `NEXT_PUBLIC_SUPPORT_EMAIL`, GCS/KMS 값, `ENVELOPE_MASTER_KEY_BASE64`가 필요합니다.
+필수 환경변수는 `.env.example`을 기준으로 합니다. production은 `APP_ENV=production`, `SAFEPLAN_DB_BACKEND=prisma`, `STORAGE_PROVIDER=gcs`로 실행합니다. 실제 provider 운영에는 `MISTRAL_API_KEY`, `GROQ_API_KEY`, `BASETEN_API_KEY`, `BASETEN_CLASSIFIER_URL`, 일반 이미지 설명용 `BASETEN_IMAGE_DESCRIPTION_URL`, Toss 키, `DATABASE_URL`, `SESSION_SECRET`, `NEXT_PUBLIC_SUPPORT_EMAIL`, GCS/KMS 값, `ENVELOPE_MASTER_KEY_BASE64`가 필요합니다.
 
 ## 7. 서비스 계정과 IAM
 
@@ -140,7 +141,7 @@ gcloud run services update-traffic safeplan-web --region="$GCP_REGION" --to-revi
 
 - `/api/health/ready`가 200을 반환해야 합니다.
 - Toss 콘솔 success/fail URL과 webhook endpoint를 운영 도메인 기준으로 등록합니다. 일반 결제 webhook은 수신 후 Toss retrieve API로 재조회해 검증합니다.
-- Baseten classifier URL을 설정한 뒤 live E2E에서 `classification:baseten`을 확인합니다.
+- Baseten classifier 및 일반 이미지 설명 URL을 설정한 뒤 live E2E에서 `classification:baseten`, `image_description:baseten`을 확인합니다.
 - GCS originals/reports 객체가 private 상태로 생성/삭제되는지 확인합니다.
 
 

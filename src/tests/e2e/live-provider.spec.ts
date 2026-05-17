@@ -41,7 +41,7 @@ function makeSilentWavBuffer(seconds = 1): Buffer {
   return buffer;
 }
 
-test('paid live provider e2e hits Mistral OCR and Groq STT without falling back for extraction', async ({ page }) => {
+test('paid live provider e2e hits Mistral OCR, Groq STT, and optional Baseten image description', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: '안전합니다' }).click();
   await page.getByRole('link', { name: '자료 정리', exact: true }).click();
@@ -51,6 +51,7 @@ test('paid live provider e2e hits Mistral OCR and Groq STT without falling back 
 
   await page.getByTestId('file-input').setInputFiles([
     { name: 'live-ocr.pdf', mimeType: 'application/pdf', buffer: await makePdfBuffer() },
+    { name: 'live-photo.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=', 'base64') },
     { name: 'live-audio.wav', mimeType: 'audio/wav', buffer: makeSilentWavBuffer() }
   ]);
   await page.getByRole('button', { name: '암호화 업로드 완료' }).click();
@@ -115,6 +116,14 @@ test('paid live provider e2e hits Mistral OCR and Groq STT without falling back 
     test.info().annotations.push({
       type: 'blocker',
       description: 'BASETEN_CLASSIFIER_URL is empty, so Baseten classifier live call is blocked and classification falls back to mock.'
+    });
+  }
+  if (process.env.BASETEN_IMAGE_DESCRIPTION_URL) {
+    expect(providers).toContain('image_description:baseten');
+  } else {
+    test.info().annotations.push({
+      type: 'blocker',
+      description: 'BASETEN_IMAGE_DESCRIPTION_URL is empty, so general image description live call is blocked and falls back to mock.'
     });
   }
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { validateUploadCandidates, shouldIncludeByConfidence, inferMaterialType } from '@/lib/evidence';
+import { chooseImageAnalysisMode, hasOcrImageNameSignal } from '@/lib/image-analysis';
 
 describe('evidence policies', () => {
   it('validates supported upload types and limits', () => {
@@ -19,5 +20,13 @@ describe('evidence policies', () => {
     expect(inferMaterialType('audio/webm', 'memo.webm')).toBe('audio');
     expect(inferMaterialType('text/plain', 'note.txt')).toBe('text_note');
     expect(inferMaterialType('application/pdf', 'bank.pdf')).toBe('bank_or_payment_record');
+    expect(inferMaterialType('image/png', 'receipt_table.png')).toBe('document');
+  });
+
+  it('routes document-like images to OCR and ordinary photos to description', () => {
+    expect(hasOcrImageNameSignal('receipt_table.png')).toBe(true);
+    expect(chooseImageAnalysisMode({ mimeType: 'image/png', materialType: 'document', originalName: 'receipt_table.png' })).toBe('ocr');
+    expect(chooseImageAnalysisMode({ mimeType: 'image/jpeg', materialType: 'photo', originalName: 'family_photo.jpg' })).toBe('description');
+    expect(chooseImageAnalysisMode({ mimeType: 'application/pdf', materialType: 'document', originalName: 'report.pdf' })).toBeNull();
   });
 });

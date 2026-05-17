@@ -25,7 +25,7 @@
 - `SAFEPLAN_DB_BACKEND=prisma` + `DATABASE_URL`
 - `STORAGE_PROVIDER=gcs` + `GCS_BUCKET_ORIGINALS` + `GCS_BUCKET_DERIVED` + `GCS_BUCKET_REPORTS`
 - `KMS_KEY_NAME` + `ENVELOPE_MASTER_KEY_BASE64` 32-byte base64 secret
-- `AI_PROVIDER_MODE=real` + Mistral/Groq/Baseten key/url
+- `AI_PROVIDER_MODE=real` + Mistral/Groq/Baseten key/url + `BASETEN_IMAGE_DESCRIPTION_URL`
 - `PAYMENT_PROVIDER=toss` + Toss client/server secret
 - `NEXT_PUBLIC_SUPPORT_EMAIL`: 환불/삭제/장애 문의를 받을 공개 고객지원 이메일
 
@@ -35,7 +35,7 @@
 2. Cloud Run 배포 후 `/api/health/ready` 200 확인
 3. GCS originals/reports bucket private object write/read/delete smoke
 4. Toss live 또는 test-live 결제 current-window redirect, confirm API, webhook 재조회 smoke
-5. Baseten classifier URL 연결 후 `classification:baseten` live E2E 재검증
+5. Baseten classifier 및 일반 이미지 설명 URL 연결 후 `classification:baseten`, `image_description:baseten` live E2E 재검증
 6. 실제 도메인 HTTPS/쿠키 secure/same-origin 동작 확인
 7. 실제 고객지원 이메일 수신/응답 프로세스 확인
 8. 개인정보/전자상거래/법률 문구 최종 검토

@@ -91,6 +91,11 @@ spec:
                 secretKeyRef:
                   name: safeplan-baseten-classifier-url
                   key: latest
+            - name: BASETEN_IMAGE_DESCRIPTION_URL
+              valueFrom:
+                secretKeyRef:
+                  name: safeplan-baseten-image-description-url
+                  key: latest
             - name: TOSS_CLIENT_KEY
               valueFrom:
                 secretKeyRef:

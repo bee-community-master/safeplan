@@ -2,7 +2,7 @@
 
 ## 데이터 분리 모델
 
-- 원본 증거 파일, 사용자 메모, OCR/STT 결과, AI 분류, evidence card, PDF, 공유 URL을 별도 레코드/객체로 분리한다.
+- 원본 증거 파일, 사용자 메모, OCR/STT 결과, 일반 이미지 설명, AI 분류, evidence card, PDF, 공유 URL을 별도 레코드/객체로 분리한다.
 - 재정 시뮬레이터 입력값은 서버 API로 전송하지 않고 브라우저 계산과 명시적 localStorage 저장만 제공한다.
 - Prisma 운영 스키마는 공유 DB 충돌을 줄이기 위해 `safeplan_*` 테이블 prefix를 사용하며, `SAFEPLAN_DB_BACKEND=prisma`에서 Cloud SQL/PostgreSQL에 저장한다.
 
@@ -33,7 +33,7 @@
 
 ## 외부 provider 처리 가정
 
-- Mistral OCR, Groq STT, Baseten classifier는 명시 동의와 결제 성공 후에만 호출한다.
+- Mistral OCR, Groq STT, Baseten classifier 및 일반 이미지 설명 endpoint는 명시 동의와 결제 성공 후에만 호출한다.
 - 키가 없거나 provider 장애가 있으면 mock fallback으로 로컬 happy path를 유지하고 `provider_degraded` 상태를 남긴다.
 - 민감 파일은 공개 GCS URL로 전달하지 않고 base64/provider upload 흐름을 사용한다.
 

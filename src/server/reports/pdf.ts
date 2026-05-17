@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { PDFDocument, type PDFFont, rgb } from 'pdf-lib';
+import { imageDescriptionFromDraft } from '@/lib/ai-draft';
 import { LEGAL_CAUTION_COPY } from '@/lib/constants';
 import type { CaseRecord, EvidenceCardRecord, EvidenceFileRecord } from '@/server/db/types';
 
@@ -92,7 +93,7 @@ export async function generateReportPdf(input: { caseRecord: CaseRecord; cards: 
   let y = 790;
   const draw = (text: string, size = 11, color = rgb(0.1, 0.12, 0.14)) => {
     for (const line of wrapText(text, font, size, maxTextWidth)) {
-      if (y < 70) {
+      if (y < margin) {
         page = doc.addPage([595, 842]);
         y = 790;
       }
@@ -116,6 +117,8 @@ export async function generateReportPdf(input: { caseRecord: CaseRecord; cards: 
   draw(PDF_SECTION_HEADINGS[4], 15);
   for (const card of input.cards) {
     draw(`- ${card.dateCandidate || '날짜 미상'} | ${card.title} | 추출 신뢰도 ${card.confidenceLevel}단계`);
+    const imageDescription = imageDescriptionFromDraft(card.aiDraftJson);
+    if (imageDescription) draw(`일반 이미지 설명 초안: ${imageDescription}`);
     draw(card.summaryKo);
     if (card.userMemo) draw(`사용자 메모: ${card.userMemo}`);
   }

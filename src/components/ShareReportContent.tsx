@@ -19,6 +19,9 @@ export function ShareReportContent({ cards, fileCount }: { cards: SharedReportCa
           <div key={card.id} className="rounded-3xl border border-line bg-white p-5 shadow-soft">
             <h3 className="font-black">{card.title}</h3>
             <p className="mt-2 text-sm text-teal">{card.dateCandidate || '날짜 미상'} · 추출 신뢰도 {card.confidenceLevel}단계</p>
+            {card.imageDescriptionKo && (
+              <p className="mt-2 rounded-2xl bg-calm p-3 text-sm leading-6 text-muted">이미지 설명 초안: {card.imageDescriptionKo}</p>
+            )}
             <p className="mt-2 leading-7 text-muted">{card.summaryKo}</p>
           </div>
         ))}

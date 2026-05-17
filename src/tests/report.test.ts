@@ -54,7 +54,7 @@ describe('report PDF contract', () => {
       includeInReport: true,
       userConfirmed: true,
       userMemo: '사용자 메모도 한글로 표시되어야 합니다.',
-      aiDraftJson: {},
+      aiDraftJson: { imageDescriptionKo: '일반 이미지 설명 초안도 리포트에 표시되어야 합니다.' },
       createdAt: now,
       updatedAt: now,
       deletedAt: null
