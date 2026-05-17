@@ -14,6 +14,17 @@ export function isProviderMissingCredentialError(error: unknown): error is Provi
 
 const aiTagSchema = z.enum(AI_TAGS);
 const materialTypeSchema = z.enum(MATERIAL_TYPES);
+const PROHIBITED_AI_CLAIM_PATTERNS = [
+  /법적으로\s*유효한\s*증거/,
+  /승소\s*가능성/,
+  /이혼해야\s*합니다/,
+  /법원에서\s*인정/,
+  /증거능력이\s*있/
+] as const;
+
+function containsProhibitedAiClaim(value: string): boolean {
+  return PROHIBITED_AI_CLAIM_PATTERNS.some((pattern) => pattern.test(value));
+}
 
 export const basetenResponseSchema = z.object({
   title: z.string().min(1).max(120),
@@ -51,4 +62,20 @@ export const basetenResponseSchema = z.object({
   includeInReportDefault: z.boolean().default(false),
   needsUserReview: z.boolean().default(true),
   legalCaution: z.string().default('자료 취득 경위 및 제출 가능성은 변호사 검토 필요')
+}).superRefine((value, ctx) => {
+  const textFields = [
+    ['title', value.title],
+    ['summaryKo', value.summaryKo],
+    ['legalCaution', value.legalCaution],
+    ...value.tags.map((tag, index) => [`tags.${index}.rationale`, tag.rationale] as const)
+  ] as const;
+  for (const [path, text] of textFields) {
+    if (containsProhibitedAiClaim(text)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'prohibited_ai_claim',
+        path: path.split('.')
+      });
+    }
+  }
 });

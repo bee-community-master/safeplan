@@ -7,6 +7,7 @@ test('safeplan local mock happy path', async ({ page, context }) => {
   await expect(page.getByTestId('runway-stopped')).toContainText('0.5개월');
   await page.getByRole('link', { name: '자료 정리 흐름으로 이동' }).click();
   await page.getByRole('button', { name: '안전 확인 후 업로드 시작' }).click();
+  await page.getByRole('button', { name: '안전합니다' }).click();
   await expect(page.getByText('자료 업로드 · 동의 · 결제')).toBeVisible();
 
   await page.getByTestId('file-input').setInputFiles([
@@ -29,10 +30,19 @@ test('safeplan local mock happy path', async ({ page, context }) => {
 
   const cards = page.getByTestId('evidence-card');
   await expect(cards.first()).toBeVisible();
+  await expect(cards.first()).toContainText('원본 파일');
+  await expect(cards.first()).toContainText('자동 태그 초안');
   const count = await cards.count();
   expect(count).toBeGreaterThanOrEqual(3);
   for (let index = 0; index < count; index += 1) {
     const card = cards.nth(index);
+    const revealVeryLow = card.getByRole('button', { name: '이 자료 열어 검토' });
+    if (await revealVeryLow.count()) await revealVeryLow.click();
+    const confirm = card.getByLabel('사용자가 확인했습니다');
+    if (!(await confirm.isVisible().catch(() => false))) {
+      const summary = card.getByText('중간 신뢰도 자료 펼쳐 검토');
+      if (await summary.count()) await summary.click();
+    }
     await card.getByLabel('사용자가 확인했습니다').check();
     await card.getByLabel('리포트에 포함').check();
     await card.getByRole('button', { name: '카드 저장' }).click();
@@ -58,4 +68,9 @@ test('safeplan local mock happy path', async ({ page, context }) => {
   await page.getByLabel(/삭제하거나 더 이상 열 수 없게 처리/).check();
   await page.getByRole('button', { name: '자료 전체 삭제' }).click();
   await expect(page.getByRole('status')).toContainText('삭제');
+
+  const deletedSharePage = await context.newPage();
+  await deletedSharePage.goto(shareUrl!);
+  await expect(deletedSharePage.getByText('만료되었거나 폐기된 링크입니다')).toBeVisible();
+  await deletedSharePage.close();
 });

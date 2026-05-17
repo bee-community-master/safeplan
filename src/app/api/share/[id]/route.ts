@@ -1,5 +1,5 @@
 import { assertOwnsReport } from '@/server/auth/ownership';
-import { createShareLink } from '@/server/reports/report-service';
+import { createShareLink, toShareLinkSummary } from '@/server/reports/report-service';
 import { appUrl } from '@/lib/url';
 import { jsonError, jsonOk } from '@/server/http';
 
@@ -9,7 +9,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const body = (await request.json().catch(() => ({}))) as { password?: string | null };
     await assertOwnsReport(reportId);
     const { share, token } = await createShareLink(reportId, body.password || null);
-    return jsonOk({ share, token, url: appUrl(`/share/${token}`) });
+    return jsonOk({ share: toShareLinkSummary(share), token, url: appUrl(`/share/${token}`) });
   } catch (error) {
     return jsonError(error, 400);
   }

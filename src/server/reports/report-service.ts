@@ -1,6 +1,6 @@
 import 'server-only';
 import { LIMITS } from '@/lib/constants';
-import { shouldIncludeByConfidence } from '@/lib/evidence';
+import type { ReportSnapshot, ShareLinkSummaryDto } from '@/lib/share';
 import type { ReportRecord, ShareLinkRecord } from '@/server/db/types';
 import { readDb, updateDb } from '@/server/db/local-store';
 import { deleteObject, readObject, writeObject } from '@/server/files/object-store';
@@ -12,22 +12,42 @@ export async function generateReport(caseId: string): Promise<ReportRecord> {
   const caseRecord = db.cases.find((item) => item.id === caseId && item.deletedAt === null);
   if (!caseRecord) throw new Error('case_not_found');
   const cards = db.evidenceCards.filter(
-    (card) => card.caseId === caseId && card.deletedAt === null && (card.includeInReport || shouldIncludeByConfidence(card.confidenceLevel, card.userConfirmed, card.includeInReport)) && card.userConfirmed
+    (card) => card.caseId === caseId && card.deletedAt === null && card.userConfirmed && card.includeInReport
   );
   if (cards.length === 0) throw new Error('no_confirmed_cards');
-  const files = db.evidenceFiles.filter((file) => file.caseId === caseId && file.deletedAt === null);
+  const includedFileIds = new Set(cards.map((card) => card.fileId));
+  const files = db.evidenceFiles.filter((file) => file.caseId === caseId && file.deletedAt === null && includedFileIds.has(file.id));
   const pdf = await generateReportPdf({ caseRecord, cards, files });
   const now = new Date().toISOString();
   const objectName = `${caseId}/${Date.now()}-safeplan-report.pdf`;
   const pdfBucket = process.env.GCS_BUCKET_REPORTS || 'local-reports';
+  const pdfSha256 = sha256Hex(pdf);
+  const snapshotCards: ReportSnapshot['cards'] = cards.map((card) => ({
+    id: card.id,
+    fileId: card.fileId,
+    title: card.title,
+    dateCandidate: card.dateCandidate,
+    confidenceLevel: card.confidenceLevel,
+    summaryKo: card.summaryKo
+  }));
   await writeObject(pdfBucket, objectName, pdf, 'application/pdf');
   return updateDb((mutableDb) => {
+    const version = mutableDb.reports.filter((item) => item.caseId === caseId).length + 1;
+    const snapshot: ReportSnapshot = {
+      version,
+      generatedAt: now,
+      includedFileIds: [...includedFileIds],
+      pdfSha256,
+      fileCount: files.length,
+      cards: snapshotCards
+    };
     const record: ReportRecord = {
       id: id('report'),
       caseId,
-      version: mutableDb.reports.filter((item) => item.caseId === caseId).length + 1,
+      version,
       pdfBucket,
       pdfObject: objectName,
+      snapshotJson: snapshot,
       generatedAt: now,
       deletedAt: null
     };
@@ -77,6 +97,16 @@ export async function createShareLink(reportId: string, password?: string | null
     return record;
   });
   return { share, token };
+}
+
+export function toShareLinkSummary(share: ShareLinkRecord): ShareLinkSummaryDto {
+  return {
+    id: share.id,
+    expiresAt: share.expiresAt,
+    revokedAt: share.revokedAt,
+    accessCount: share.accessCount,
+    passwordProtected: Boolean(share.passwordHash)
+  };
 }
 
 export async function revokeShareLink(shareId: string): Promise<ShareLinkRecord> {

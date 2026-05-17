@@ -142,6 +142,7 @@ model Report {
   version     Int
   pdfBucket   String
   pdfObject   String
+  snapshotJson Json
   generatedAt DateTime
   deletedAt   DateTime?
   shareLinks  ShareLink[]

@@ -16,6 +16,22 @@ import type {
 } from './types';
 import { prismaClient } from './prisma';
 
+type PrismaDbClient = Pick<
+  ReturnType<typeof prismaClient>,
+  | '$executeRawUnsafe'
+  | 'user'
+  | 'case'
+  | 'consentRecord'
+  | 'evidenceFile'
+  | 'extractionResult'
+  | 'evidenceCard'
+  | 'paymentIntent'
+  | 'report'
+  | 'shareLink'
+  | 'auditEvent'
+  | 'processingJob'
+>;
+
 function date(value: string): Date {
   return new Date(value);
 }
@@ -147,6 +163,7 @@ function mapReport(record: Awaited<ReturnType<ReturnType<typeof prismaClient>['r
     version: record.version,
     pdfBucket: record.pdfBucket,
     pdfObject: record.pdfObject,
+    snapshotJson: record.snapshotJson as ReportRecord['snapshotJson'],
     generatedAt: iso(record.generatedAt),
     deletedAt: maybeIso(record.deletedAt)
   };
@@ -189,8 +206,7 @@ function mapJob(record: Awaited<ReturnType<ReturnType<typeof prismaClient>['proc
   };
 }
 
-export async function readPrismaDb(): Promise<SafeplanDb> {
-  const prisma = prismaClient();
+async function readPrismaDbWith(prisma: PrismaDbClient): Promise<SafeplanDb> {
   const [users, cases, consentRecords, evidenceFiles, extractionResults, evidenceCards, paymentIntents, reports, shareLinks, auditEvents, processingJobs] = await Promise.all([
     prisma.user.findMany({ orderBy: { createdAt: 'asc' } }),
     prisma.case.findMany({ orderBy: { createdAt: 'asc' } }),
@@ -220,12 +236,7 @@ export async function readPrismaDb(): Promise<SafeplanDb> {
   };
 }
 
-export async function writePrismaDb(db: SafeplanDb): Promise<void> {
-  const prisma = prismaClient();
-  await prisma.$transaction(
-    async (tx) => {
-      await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext('safeplan_db_replace'))");
-
+async function replacePrismaDb(tx: PrismaDbClient, db: SafeplanDb): Promise<void> {
       await tx.shareLink.deleteMany();
       await tx.report.deleteMany();
       await tx.evidenceCard.deleteMany();
@@ -364,6 +375,7 @@ export async function writePrismaDb(db: SafeplanDb): Promise<void> {
             version: record.version,
             pdfBucket: record.pdfBucket,
             pdfObject: record.pdfObject,
+            snapshotJson: json(record.snapshotJson),
             generatedAt: date(record.generatedAt),
             deletedAt: maybeDate(record.deletedAt)
           }))
@@ -412,6 +424,35 @@ export async function writePrismaDb(db: SafeplanDb): Promise<void> {
           }))
         });
       }
+}
+
+
+export async function readPrismaDb(): Promise<SafeplanDb> {
+  return readPrismaDbWith(prismaClient());
+}
+
+export async function writePrismaDb(db: SafeplanDb): Promise<void> {
+  const prisma = prismaClient();
+  await prisma.$transaction(
+    async (tx) => {
+      const client = tx as PrismaDbClient;
+      await client.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext('safeplan_db_replace'))");
+      await replacePrismaDb(client, db);
+    },
+    { timeout: 30_000, maxWait: 10_000 }
+  );
+}
+
+export async function updatePrismaDb<T>(mutator: (db: SafeplanDb) => T | Promise<T>): Promise<T> {
+  const prisma = prismaClient();
+  return prisma.$transaction(
+    async (tx) => {
+      const client = tx as PrismaDbClient;
+      await client.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext('safeplan_db_replace'))");
+      const db = await readPrismaDbWith(client);
+      const result = await mutator(db);
+      await replacePrismaDb(client, db);
+      return result;
     },
     { timeout: 30_000, maxWait: 10_000 }
   );

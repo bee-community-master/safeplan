@@ -46,6 +46,7 @@ test('paid live provider e2e hits Mistral OCR and Groq STT without falling back 
   await page.getByRole('button', { name: '안전합니다' }).click();
   await page.getByRole('link', { name: '자료 정리', exact: true }).click();
   await page.getByRole('button', { name: '안전 확인 후 업로드 시작' }).click();
+  await page.getByRole('button', { name: '안전합니다' }).click();
   await expect(page.getByText('자료 업로드 · 동의 · 결제')).toBeVisible();
 
   await page.getByTestId('file-input').setInputFiles([
@@ -76,6 +77,13 @@ test('paid live provider e2e hits Mistral OCR and Groq STT without falling back 
   expect(cardCount).toBeGreaterThanOrEqual(2);
   for (let index = 0; index < cardCount; index += 1) {
     const card = cards.nth(index);
+    const revealVeryLow = card.getByRole('button', { name: '이 자료 열어 검토' });
+    if (await revealVeryLow.count()) await revealVeryLow.click();
+    const confirm = card.getByLabel('사용자가 확인했습니다');
+    if (!(await confirm.isVisible().catch(() => false))) {
+      const summary = card.getByText('중간 신뢰도 자료 펼쳐 검토');
+      if (await summary.count()) await summary.click();
+    }
     await card.getByLabel('사용자가 확인했습니다').check();
     await card.getByLabel('리포트에 포함').check();
     await card.getByRole('button', { name: '카드 저장' }).click();

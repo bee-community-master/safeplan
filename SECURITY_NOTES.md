@@ -41,6 +41,9 @@
 - `/api/health/ready`는 production 필수 설정 누락 시 503을 반환한다.
 - 공개 검색은 landing/pricing/help/legal/status 같은 일반 안내 페이지로 제한하고, `/api/`, `/evidence/`, `/share/`, `/account`는 robots/noindex 정책으로 보호한다.
 - 공유 링크는 기본 14일 만료이며 선택적으로 비밀번호를 설정할 수 있다. 비밀번호가 설정된 링크는 별도 확인 후에만 리포트 내용을 렌더링한다.
+- 공유 링크 API는 저장된 token/password hash를 클라이언트로 반환하지 않는다.
+- 공유 링크 화면은 현재 evidence card를 다시 조회하지 않고 리포트 생성 시점의 immutable snapshot만 렌더링한다.
+- AI provider 응답은 법률 효력, 승소 가능성, 이혼 권유, 증거능력 단정 같은 금지 문구를 포함하면 거부하고 mock/degraded fallback 경로로 전환한다.
 
 ## 남은 검토 항목
 

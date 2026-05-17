@@ -1,4 +1,5 @@
 import type { ConsentType, ExtractionKind, MaterialType, ProviderName } from '@/lib/types';
+import type { ReportSnapshot } from '@/lib/share';
 
 export interface UserRecord {
   id: string;
@@ -96,6 +97,7 @@ export interface ReportRecord {
   version: number;
   pdfBucket: string;
   pdfObject: string;
+  snapshotJson: ReportSnapshot;
   generatedAt: string;
   deletedAt: string | null;
 }

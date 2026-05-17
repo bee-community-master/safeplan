@@ -12,6 +12,7 @@ const USER_SAFE_ERRORS: Record<string, string> = {
   share_password_required: '비밀번호를 입력해 주세요.',
   share_password_invalid: '비밀번호가 일치하지 않습니다. 다시 확인해 주세요.',
   payment_required: '결제 완료 후 자료 정리를 시작할 수 있습니다.',
+  payment_consent_required: '결제 동의 기록을 먼저 완료해 주세요.',
   consent_required: '필수 동의를 완료한 뒤 자료 정리를 시작할 수 있습니다.',
   payment_not_found: '결제 정보를 찾을 수 없습니다. 결제를 다시 시도해 주세요.',
   mock_payment_only: '현재 결제를 완료할 수 없습니다. 다시 시도해 주세요.',

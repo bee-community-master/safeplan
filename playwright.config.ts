@@ -17,7 +17,7 @@ export default defineConfig({
   webServer: {
     command: `rm -rf ${dataDir} && SAFEPLAN_DATA_DIR=${dataDir} APP_URL=${appUrl} NEXT_PUBLIC_APP_URL=${appUrl} PORT=${port} AI_PROVIDER_MODE=${aiProviderMode} PAYMENT_PROVIDER=${paymentProvider} pnpm start`,
     url: appUrl,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: process.env.PLAYWRIGHT_REUSE_SERVER === '1',
     timeout: 120_000
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }]

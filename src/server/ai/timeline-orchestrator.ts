@@ -19,7 +19,7 @@ function warnProviderDegraded(provider: 'baseten' | 'groq' | 'mistral', error: u
 
 function hasRequiredConsents(caseId: string, db: Awaited<ReturnType<typeof readDb>>): boolean {
   const accepted = new Set(db.consentRecords.filter((item) => item.caseId === caseId).map((item) => item.consentType));
-  return accepted.has('ai_processing') && accepted.has('sensitive_data') && accepted.has('original_evidence');
+  return accepted.has('ai_processing') && accepted.has('sensitive_data') && accepted.has('original_evidence') && accepted.has('overseas_transfer') && accepted.has('payment');
 }
 
 function isPaid(caseId: string, db: Awaited<ReturnType<typeof readDb>>): boolean {

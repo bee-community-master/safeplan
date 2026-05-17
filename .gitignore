@@ -13,7 +13,7 @@ out
 
 # local data
 .safeplan-data
-uploads
+/uploads
 coverage
 playwright-report
 test-results

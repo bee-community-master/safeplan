@@ -48,7 +48,8 @@ export function verifyTossWebhookSignature(input: { rawBody: string; signatureHe
   const timestamp = Number(input.timestampHeader);
   if (!Number.isFinite(timestamp)) throw new Error('toss_webhook_signature_invalid');
   const nowMs = input.now?.getTime() ?? Date.now();
-  if (Math.abs(nowMs - timestamp) > TOSS_WEBHOOK_TOLERANCE_MS) throw new Error('toss_webhook_signature_invalid');
+  const timestampMs = timestamp < 10_000_000_000 ? timestamp * 1000 : timestamp;
+  if (Math.abs(nowMs - timestampMs) > TOSS_WEBHOOK_TOLERANCE_MS) throw new Error('toss_webhook_signature_invalid');
   const expected = hmacSha256Hex(tossWebhookSecret(), `${input.timestampHeader}.${input.rawBody}`);
   const signatures = parseTossSignature(input.signatureHeader);
   if (!signatures.some((signature) => timingSafeHexEqual(expected, signature))) throw new Error('toss_webhook_signature_invalid');
@@ -72,6 +73,14 @@ function assertTossConfigured(): { clientKey: string; secretKey: string } {
 
 function tossAuthHeader(secretKey: string): string {
   return `Basic ${Buffer.from(`${secretKey}:`).toString('base64')}`;
+}
+
+function hasPaymentConsent(caseId: string, db: Awaited<ReturnType<typeof readDb>>): boolean {
+  return db.consentRecords.some((record) => record.caseId === caseId && record.consentType === 'payment');
+}
+
+function assertPaymentConsent(caseId: string, db: Awaited<ReturnType<typeof readDb>>): void {
+  if (!hasPaymentConsent(caseId, db)) throw new Error('payment_consent_required');
 }
 
 async function confirmWithToss(secretKey: string, input: { paymentKey: string; orderId: string; amount: number }): Promise<unknown> {
@@ -105,6 +114,7 @@ export async function createPaymentIntent(caseId: string): Promise<PaymentIntent
   const provider = paymentProvider();
   const now = new Date().toISOString();
   const record = await updateDb((db) => {
+    assertPaymentConsent(caseId, db);
     const existing = db.paymentIntents.find((payment) => payment.caseId === caseId && payment.status !== 'cancelled');
     if (existing) return existing;
     const payment: PaymentIntentRecord = {
@@ -152,6 +162,7 @@ export async function createPaymentIntent(caseId: string): Promise<PaymentIntent
 async function markPaymentPaid(params: { caseId: string; paymentId: string; expectedProvider: 'mock' | 'toss'; providerPaymentKey: string }): Promise<PaymentIntentRecord> {
   const now = new Date().toISOString();
   return updateDb((db) => {
+    assertPaymentConsent(params.caseId, db);
     const payment = db.paymentIntents.find((item) => item.id === params.paymentId && item.caseId === params.caseId);
     if (!payment) throw new Error('payment_not_found');
     if (payment.provider !== params.expectedProvider) throw new Error(params.expectedProvider === 'mock' ? 'mock_payment_only' : 'toss_payment_required');
@@ -188,6 +199,7 @@ async function markTossPaid(caseId: string, paymentId: string, paymentKey: strin
 export async function confirmTossPayment(input: TossConfirmInput): Promise<PaymentIntentRecord> {
   if (input.amount !== PRICE_KRW) throw new Error('payment_amount_mismatch');
   if (input.orderId !== input.paymentId) throw new Error('payment_order_mismatch');
+  assertPaymentConsent(input.caseId, await readDb());
   const { secretKey } = assertTossConfigured();
   await confirmWithToss(secretKey, { paymentKey: input.paymentKey, orderId: input.orderId, amount: input.amount });
   return markTossPaid(input.caseId, input.paymentId, input.paymentKey);

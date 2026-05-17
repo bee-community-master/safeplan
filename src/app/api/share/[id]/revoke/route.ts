@@ -1,6 +1,6 @@
 import { assertOwnsReport } from '@/server/auth/ownership';
 import { readDb } from '@/server/db/local-store';
-import { revokeShareLink } from '@/server/reports/report-service';
+import { revokeShareLink, toShareLinkSummary } from '@/server/reports/report-service';
 import { jsonError, jsonOk } from '@/server/http';
 
 export async function POST(_: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -11,7 +11,7 @@ export async function POST(_: Request, { params }: { params: Promise<{ id: strin
     if (!existing) throw new Error('share_not_found');
     await assertOwnsReport(existing.reportId);
     const share = await revokeShareLink(shareId);
-    return jsonOk({ share });
+    return jsonOk({ share: toShareLinkSummary(share) });
   } catch (error) {
     return jsonError(error, 400);
   }

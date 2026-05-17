@@ -92,7 +92,7 @@ docker build -t safeplan:production-design .
 결과:
 
 - `pnpm lint`: 통과 (`next lint` no errors + `tsc --noEmit` 통과)
-- `pnpm test`: 통과 — 8 files, 14 tests
+- `pnpm test`: 통과 — 8 files, 18 tests
 - `pnpm build`: 통과 — Next.js 15.5.18 production build, 29 static pages generated
 - `pnpm e2e`: 통과 — Playwright Chromium happy path 1 passed, live-provider spec 1 skipped
 - `pnpm e2e:live`: 통과 — Playwright Chromium live provider full path 1 passed
@@ -149,10 +149,31 @@ pnpm e2e:live
 추가 검증:
 
 - `pnpm lint`: 통과
-- `pnpm test`: 통과 — 8 files, 14 tests
+- `pnpm test`: 통과 — 8 files, 18 tests
 - `pnpm build`: 통과 — 29 static pages
 - `pnpm e2e`: 통과 — happy path 1 passed, live-provider skipped
 - `pnpm e2e:live`: 통과 — Mistral OCR/Groq STT live path 1 passed
+
+## 2026-05-17 repeated code-review hardening update
+
+반복 `$code-review`에서 나온 BLOCK/HIGH/MEDIUM 항목을 추가 반영했다.
+
+- 리포트 생성 시 사용자 확인+포함 카드와 해당 원본 파일만 PDF에 포함하고, 공유 링크는 생성 당시 `snapshotJson`에서만 렌더링한다.
+- 공유 링크 API 응답은 `tokenHash`/`passwordHash`를 반환하지 않고 안전한 요약 DTO만 반환한다.
+- 업로드 제한은 요청 단위가 아니라 케이스 누적 파일 수/용량까지 검증하며, DB 저장 실패 시 이미 쓴 암호화 객체를 정리한다.
+- 결제 생성/완료 API에 payment consent server-side gate를 추가하고, AI 처리에는 sensitive/original/AI/overseas/payment 동의를 모두 요구한다.
+- 리뷰 화면에 원본 파일, 자료 유형, 날짜 출처, 인물/장소/태그 초안, AI 초안 메타데이터를 표시하고 confidence 단계별 접힘/검토 UX를 적용했다.
+- evidence upload 진입 전에 별도 안전 확인 팝업을 띄우고, `/account`에서 세션 내 자료 묶음 상태와 삭제 동작을 제공한다.
+- Baseten classifier 응답에서 “법적으로 유효한 증거”, “승소 가능성”, “이혼해야 합니다” 등 금지된 법률/결과 판단 문구를 거부한다.
+- Next App Router 동적 segment 이름 충돌을 복구하고, `src/app/api/uploads`가 `.gitignore`에 의해 빠지지 않도록 수정했다.
+
+추가 검증:
+
+- `pnpm lint`: 통과
+- `pnpm test`: 통과 — 8 files, 18 tests
+- `pnpm build`: 통과 — 29 static pages
+- `pnpm e2e`: 통과 — happy path 1 passed, live-provider skipped
+- `pnpm e2e:live`: 통과 — live provider path 1 passed
 
 ## Provider mode
 

@@ -1,5 +1,6 @@
 import { SafetyNotice } from '@/components/SafetyNotice';
 import { EvidenceUploadFlow } from '@/components/EvidenceUploadFlow';
+import { SafetyPopup } from '@/components/SafetyPopup';
 
 export const metadata = {
   robots: { index: false, follow: false },
@@ -10,6 +11,7 @@ export default async function EvidenceUploadPage({ params }: { params: Promise<{
   const { caseId } = await params;
   return (
     <div className="space-y-6">
+      <SafetyPopup storageKey={`safeplan_upload_safety_${caseId}`} title="업로드 전 안전 확인" />
       <SafetyNotice compact />
       <EvidenceUploadFlow caseId={caseId} />
     </div>

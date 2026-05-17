@@ -20,4 +20,22 @@ describe('provider mocks and parsing', () => {
     expect(card.tags[0]?.tag).toBe('경제적 통제');
     expect(basetenResponseSchema.parse(card).confidenceLevel).toBeGreaterThanOrEqual(3);
   });
+
+  it('rejects classifier output containing prohibited legal or outcome claims', () => {
+    expect(() =>
+      basetenResponseSchema.parse({
+        title: '법적으로 유효한 증거',
+        summaryKo: '승소 가능성을 높입니다.',
+        materialType: 'text_note',
+        dateCandidates: [],
+        people: [],
+        locations: [],
+        tags: [{ tag: '기타/검토 필요', confidence: 0.5, rationale: '이혼해야 합니다.' }],
+        confidenceLevel: 4,
+        includeInReportDefault: false,
+        needsUserReview: true,
+        legalCaution: '법원에서 인정됩니다.'
+      })
+    ).toThrow();
+  });
 });

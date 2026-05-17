@@ -3,7 +3,7 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { LIMITS } from '@/lib/constants';
 import type { SafeplanDb } from './types';
-import { readPrismaDb, writePrismaDb } from './prisma-store';
+import { readPrismaDb, updatePrismaDb, writePrismaDb } from './prisma-store';
 
 const defaultDb = (): SafeplanDb => ({
   users: [],
@@ -78,6 +78,8 @@ async function writeDb(db: SafeplanDb): Promise<void> {
 }
 
 export async function updateDb<T>(mutator: (db: SafeplanDb) => T | Promise<T>): Promise<T> {
+  if (dbBackend() === 'prisma') return updatePrismaDb(mutator);
+
   const run = async () => {
     const db = await readDb();
     const result = await mutator(db);
