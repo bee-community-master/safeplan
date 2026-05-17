@@ -59,7 +59,7 @@
 최종 순차 검증:
 
 ```bash
-pnpm lint && pnpm test && pnpm build && pnpm e2e
+pnpm lint && pnpm test && pnpm build && pnpm e2e && pnpm e2e:live
 ```
 
 결과:
@@ -67,7 +67,7 @@ pnpm lint && pnpm test && pnpm build && pnpm e2e
 - `pnpm lint`: 통과 (`next lint` no errors + `tsc --noEmit` 통과)
 - `pnpm test`: 통과 — 5 files, 8 tests
 - `pnpm build`: 통과 — Next.js 15.5.18 production build, 21 static pages generated
-- `pnpm e2e`: 통과 — Playwright Chromium happy path 1 test passed
+- `pnpm e2e`: 통과 — Playwright Chromium happy path 1 passed, live-provider spec 1 skipped
 
 추가 수행:
 
@@ -78,6 +78,23 @@ pnpm exec playwright install --with-deps
 ```
 
 Playwright browser가 최초 미설치라 `pnpm exec playwright install --with-deps`를 실행한 뒤 E2E를 재실행했다.
+
+
+## Live E2E 추가 검증
+
+사용자 승인에 따라 비용이 발생할 수 있는 live provider E2E를 추가/실행했다.
+
+```bash
+pnpm build
+pnpm e2e:live
+```
+
+결과:
+
+- `pnpm e2e:live`: 통과 — Playwright Chromium live provider full path 1 test passed
+- 실제 외부 호출 확인: `ocr:mistral=1`, `stt:groq=1`
+- 현재 `.env.local`의 `BASETEN_CLASSIFIER_URL`이 비어 있어 Baseten classifier live call은 blocked 상태이며 classification은 mock fallback으로 검증됐다.
+- Toss 실결제는 현재 MVP 구현 범위가 mock payment boundary이므로 `PAYMENT_PROVIDER=mock`으로 유지했다.
 
 ## Provider mode
 
@@ -120,6 +137,7 @@ Playwright browser가 최초 미설치라 `pnpm exec playwright install --with-d
 - `DATABASE_URL`
 - `SESSION_SECRET`
 - `NEXT_PUBLIC_APP_URL`
+- `APP_URL`
 - `PAYMENT_PROVIDER`
 - `TOSS_CLIENT_KEY`
 - `TOSS_SECRET_KEY`

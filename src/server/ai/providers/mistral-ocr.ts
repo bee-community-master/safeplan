@@ -19,7 +19,7 @@ export async function mistralOcr(input: OcrInput): Promise<{ markdown: string; r
   const isImage = input.mimeType.startsWith('image/');
   const dataUrl = `data:${input.mimeType};base64,${input.content.toString('base64')}`;
   const document = isImage
-    ? { type: 'image_url', image_url: { url: dataUrl } }
+    ? { type: 'image_url', image_url: dataUrl }
     : { type: 'document_url', document_url: dataUrl };
   const response = await fetch('https://api.mistral.ai/v1/ocr', {
     method: 'POST',
