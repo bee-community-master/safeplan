@@ -41,6 +41,7 @@ describe('production readiness gates', () => {
     vi.stubEnv('GROQ_API_KEY', 'groq');
     vi.stubEnv('BASETEN_API_KEY', 'baseten');
     vi.stubEnv('BASETEN_CLASSIFIER_URL', 'https://model.example.com');
+    vi.stubEnv('BASETEN_IMAGE_DESCRIPTION_URL', 'https://image-description.example.com');
     vi.stubEnv('PAYMENT_PROVIDER', 'toss');
     vi.stubEnv('TOSS_CLIENT_KEY', 'client');
     vi.stubEnv('TOSS_SECRET_KEY', 'secret');

@@ -7,7 +7,7 @@ export type PartnerSupportRisk = 'maintained' | 'stopped' | 'partial';
 export type DateSource = 'ocr' | 'metadata' | 'user' | 'inferred' | null;
 export type ConsentType = 'ai_processing' | 'sensitive_data' | 'overseas_transfer' | 'payment' | 'original_evidence';
 export type ProviderName = 'mistral' | 'groq' | 'baseten' | 'mock';
-export type ExtractionKind = 'ocr' | 'stt' | 'classification';
+export type ExtractionKind = 'ocr' | 'stt' | 'image_description' | 'classification';
 
 export interface RunwayInput {
   availableCash: number;
@@ -44,6 +44,7 @@ export interface BasetenClassifierInput {
   materialType: MaterialType;
   ocrMarkdown: string | null;
   transcript: string | null;
+  imageDescriptionKo: string | null;
   userMemo: string | null;
   fileMetadata: {
     originalName: string;
@@ -56,6 +57,7 @@ export interface BasetenClassifierInput {
       sourceDetail: 'filename' | 'exif_datetime_original' | 'exif_datetime_digitized' | 'exif_datetime';
     } | null;
     dateInferencePolicy?: 'visual_capture_date_from_title_or_metadata_only' | 'standard';
+    imageAnalysisMode?: 'ocr' | 'description' | 'not_image';
   };
   allowedTags: readonly string[];
 }
@@ -63,6 +65,7 @@ export interface BasetenClassifierInput {
 export interface BasetenClassifierResponse {
   title: string;
   summaryKo: string;
+  imageDescriptionKo?: string | null;
   materialType: MaterialType;
   dateCandidates: Array<{ date: string | null; source: 'ocr' | 'metadata' | 'user' | 'inferred'; confidence: number }>;
   people: Array<{ label: '나' | '배우자' | '제3자' | '미상'; rawMention: string; confidence: number }>;

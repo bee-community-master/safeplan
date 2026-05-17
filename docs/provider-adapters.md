@@ -3,6 +3,7 @@
 - Mistral OCR: `src/server/ai/providers/mistral-ocr.ts`
 - Groq STT: `src/server/ai/providers/groq-stt.ts`
 - Baseten classifier: `src/server/ai/providers/baseten-classifier.ts`
+- Baseten 일반 이미지 설명: `src/server/ai/providers/baseten-image-description.ts`
 - Mock provider: `src/server/ai/providers/mock.ts`
 - Orchestrator: `src/server/ai/timeline-orchestrator.ts`
 

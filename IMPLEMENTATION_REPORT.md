@@ -25,6 +25,8 @@
   - Mistral OCR adapter: `src/server/ai/providers/mistral-ocr.ts`
   - Groq STT adapter: `src/server/ai/providers/groq-stt.ts`
   - Baseten classifier adapter: `src/server/ai/providers/baseten-classifier.ts`
+  - Baseten 일반 이미지 설명 adapter: `src/server/ai/providers/baseten-image-description.ts`
+  - 이미지 파일은 문서/표/캡처 신호가 있으면 OCR, 일반 사진이면 description 생성 경로로 분기한다.
   - deterministic mock provider: `src/server/ai/providers/mock.ts`
   - missing key/provider failure fallback with `provider_degraded`
 - Evidence card review/edit
@@ -33,6 +35,7 @@
   - user confirmation and explicit PDF inclusion gate
 - PDF/report/share
   - Korean PDF smoke generation with Noto Sans KR font embedding
+  - 일반 이미지 description 초안을 리뷰 화면, 공유 report, PDF 자료 타임라인에 표시
   - confirmed+included cards only
   - secure `/share/:token` URL, token hash storage, 14-day TTL, revoke, access audit
   - optional share-link password gate in user flow and protected share page
@@ -85,25 +88,20 @@
 
 ## 명령 실행 결과
 
-최종 순차 검증:
+최신 순차 검증(이미지 분기와 PDF description 반영 후):
 
 ```bash
-pnpm lint && pnpm test && pnpm build && pnpm e2e && pnpm e2e:live
-docker build -t safeplan:production-hardening .
-docker build -t safeplan:production-ux .
-docker build -t safeplan:production-design .
+pnpm lint && pnpm test && pnpm build && pnpm e2e
 ```
 
 결과:
 
 - `pnpm lint`: 통과 (`next lint` no errors + `tsc --noEmit` 통과)
-- `pnpm test`: 통과 — 12 files, 31 tests
+- `pnpm test`: 통과 — 14 files, 45 tests
 - `pnpm build`: 통과 — Next.js 15.5.18 production build, 29 static pages generated
 - `pnpm e2e`: 통과 — Playwright Chromium happy path 1 passed, language toggle 1 passed, live-provider spec 1 skipped
-- `pnpm e2e:live`: 통과 — Playwright Chromium live provider full path 1 passed
-- `docker build -t safeplan:production-hardening .`: 통과 — Prisma generate + Next production build 포함
-- `docker build -t safeplan:production-ux .`: 통과 — production UX 보강 후 Next production build 29 static pages 포함
-- `docker build -t safeplan:production-design .`: 통과 — 디자인/라우팅 정리 후 Next production build 29 static pages 포함
+- `pnpm e2e:live`: 이전 live provider full path 검증 기록은 아래 Live E2E 섹션 참고. 이번 이미지 분기 변경에서는 유료/외부 endpoint smoke를 재실행하지 않았다.
+- Docker build 검증은 이전 production hardening/UX/design pass에서 통과했다. 이번 이미지 분기 변경에서는 Docker build를 재실행하지 않았다.
 
 추가 수행:
 
@@ -129,7 +127,7 @@ pnpm e2e:live
 
 - `pnpm e2e:live`: 통과 — Playwright Chromium live provider full path 1 test passed
 - 실제 외부 호출 확인: `ocr:mistral=1`, `stt:groq=1`
-- 현재 `.env.local`의 `BASETEN_CLASSIFIER_URL`이 비어 있어 Baseten classifier live call은 blocked 상태이며 classification은 mock fallback으로 검증됐다.
+- 현재 `.env.local`의 `BASETEN_CLASSIFIER_URL`/`BASETEN_IMAGE_DESCRIPTION_URL`이 비어 있어 Baseten classifier·일반 이미지 설명 live call은 blocked 상태이며 mock fallback으로 검증됐다.
 - Local live E2E는 외부 AI 비용 검증에 초점을 맞춰 `PAYMENT_PROVIDER=mock`으로 유지했다. Toss 결제 current-window redirect/confirm 구현은 운영 credential 연결 후 별도 smoke가 필요하다.
 - 사용자 문구 정리 후에도 live E2E를 재실행해 변경된 동의/결제/자료 정리/공유/삭제 레이블로 전체 흐름이 깨지지 않음을 확인했다.
 - Production 사용자 표면 보강 후 Playwright happy path에서 비밀번호 보호 공유 링크 열기와 삭제 전 확인 UX를 함께 검증했다.
@@ -265,6 +263,7 @@ pnpm e2e:live
   - `GROQ_API_KEY`
   - `BASETEN_API_KEY`
   - `BASETEN_CLASSIFIER_URL`
+  - `BASETEN_IMAGE_DESCRIPTION_URL`
 - 실제 결제 조건:
   - `PAYMENT_PROVIDER=toss`
   - `TOSS_CLIENT_KEY`
@@ -309,6 +308,7 @@ pnpm e2e:live
 - `GROQ_API_KEY`
 - `BASETEN_API_KEY`
 - `BASETEN_CLASSIFIER_URL`
+- `BASETEN_IMAGE_DESCRIPTION_URL`
 - `GCP_PROJECT_ID`
 - `GCP_REGION=asia-northeast3`
 - `GCS_BUCKET_ORIGINALS`
@@ -320,7 +320,7 @@ pnpm e2e:live
 
 ## 알려진 blocker / 운영 전 확인 필요
 
-- Baseten live classifier는 `BASETEN_CLASSIFIER_URL`이 있어야 실제 호출까지 검증 가능하다. 현재 local live E2E는 Mistral/Groq 실제 호출과 Baseten mock fallback을 확인했다.
+- Baseten live classifier는 `BASETEN_CLASSIFIER_URL`, 일반 이미지 설명은 `BASETEN_IMAGE_DESCRIPTION_URL`이 있어야 실제 호출까지 검증 가능하다. 현재 local live E2E는 Mistral/Groq 실제 호출과 Baseten mock fallback을 확인했다.
 - Toss 실결제 current-window redirect/승인은 구현됐지만, 운영 키와 Toss 콘솔 설정 후 실제 결제 smoke가 필요하다.
 - Cloud SQL/GCS/KMS/Secret Manager 리소스를 만든 뒤 `pnpm prisma:migrate`, Cloud Run 배포, `/api/health/ready` 200 확인이 필요하다.
 - Prisma backend는 MVP 호환용 snapshot replace 계층을 유지한다. Cloud Run `maxScale=1`, `containerConcurrency=1`로 동시성 위험을 낮췄지만, 트래픽 증가 전 row-level repository와 queue 분리가 필요하다.

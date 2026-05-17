@@ -1,3 +1,4 @@
+import { imageDescriptionFromDraft } from '@/lib/ai-draft';
 import type { EvidenceCardReviewDto } from '@/lib/evidence-card-dto';
 import { assertOwnsCase } from '@/server/auth/ownership';
 import { readDb } from '@/server/db/local-store';
@@ -41,6 +42,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ caseId: st
           draft: Boolean((card.aiDraftJson as { draft?: unknown } | null)?.draft),
           providerDegraded: Boolean((card.aiDraftJson as { providerDegraded?: unknown } | null)?.providerDegraded)
         },
+        imageDescriptionKo: imageDescriptionFromDraft(card.aiDraftJson),
         userMemo: card.userMemo,
         confidenceLevel: card.confidenceLevel,
         includeInReport: card.includeInReport,

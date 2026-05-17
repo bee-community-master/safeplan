@@ -34,6 +34,7 @@ function containsProhibitedAiClaim(value: string): boolean {
 export const basetenResponseSchema = z.object({
   title: z.string().min(1).max(120),
   summaryKo: z.string().min(1).max(2000),
+  imageDescriptionKo: z.string().min(1).max(1200).nullable().optional(),
   materialType: materialTypeSchema,
   dateCandidates: z
     .array(
@@ -71,6 +72,7 @@ export const basetenResponseSchema = z.object({
   const textFields = [
     ['title', value.title],
     ['summaryKo', value.summaryKo],
+    ['imageDescriptionKo', value.imageDescriptionKo ?? ''],
     ['legalCaution', value.legalCaution],
     ...value.tags.map((tag, index) => [`tags.${index}.rationale`, tag.rationale] as const)
   ] as const;
@@ -82,5 +84,18 @@ export const basetenResponseSchema = z.object({
         path: path.split('.')
       });
     }
+  }
+});
+
+export const imageDescriptionResponseSchema = z.object({
+  descriptionKo: z.string().min(1).max(1200),
+  confidence: z.number().min(0).max(1).default(0.55)
+}).superRefine((value, ctx) => {
+  if (containsProhibitedAiClaim(value.descriptionKo)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'prohibited_ai_claim',
+      path: ['descriptionKo']
+    });
   }
 });

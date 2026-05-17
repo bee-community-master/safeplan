@@ -1,4 +1,5 @@
 import 'server-only';
+import { imageDescriptionFromDraft } from '@/lib/ai-draft';
 import { LIMITS } from '@/lib/constants';
 import type { ReportSnapshot, ShareLinkSummaryDto } from '@/lib/share';
 import { isProductionApp } from '@/lib/runtime';
@@ -42,7 +43,8 @@ export async function generateReport(caseId: string): Promise<ReportRecord> {
     title: card.title,
     dateCandidate: card.dateCandidate,
     confidenceLevel: card.confidenceLevel,
-    summaryKo: card.summaryKo
+    summaryKo: card.summaryKo,
+    imageDescriptionKo: imageDescriptionFromDraft(card.aiDraftJson)
   }));
   await writeObject(pdfBucket, objectName, pdf, 'application/pdf');
   await waitForReportPersistTestHook();

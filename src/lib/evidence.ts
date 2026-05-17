@@ -1,4 +1,5 @@
 import { AUDIO_MIME_TYPES, IMAGE_OR_PDF_MIME_TYPES, LIMITS, MATERIAL_TYPES, SUPPORTED_MIME_TYPES } from './constants';
+import { hasOcrImageNameSignal } from './image-analysis';
 import type { MaterialType } from './types';
 
 export interface UploadCandidate {
@@ -19,6 +20,7 @@ export function inferMaterialType(mimeType: string, originalName = ''): Material
   if (name.includes('계좌') || name.includes('bank') || name.includes('payment')) return 'bank_or_payment_record';
   if (name.includes('경찰') || name.includes('기관')) return 'police_or_institution_record';
   if (name.includes('capture') || name.includes('screenshot') || name.includes('캡처')) return 'capture';
+  if (hasOcrImageNameSignal(originalName)) return 'document';
   if (mimeType.startsWith('image/')) return 'photo';
   if (mimeType === 'application/pdf') return 'document';
   return MATERIAL_TYPES.includes('unknown') ? 'unknown' : 'unknown';

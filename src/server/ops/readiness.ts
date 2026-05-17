@@ -63,9 +63,16 @@ export function productionReadiness(): ReadinessReport {
   });
   add(checks, {
     name: 'ai_provider_mode',
-    ok: !production || (process.env.AI_PROVIDER_MODE === 'real' && present('MISTRAL_API_KEY') && present('GROQ_API_KEY') && present('BASETEN_API_KEY') && present('BASETEN_CLASSIFIER_URL')),
+    ok:
+      !production ||
+      (process.env.AI_PROVIDER_MODE === 'real' &&
+        present('MISTRAL_API_KEY') &&
+        present('GROQ_API_KEY') &&
+        present('BASETEN_API_KEY') &&
+        present('BASETEN_CLASSIFIER_URL') &&
+        present('BASETEN_IMAGE_DESCRIPTION_URL')),
     severity: 'blocker',
-    detail: 'Production evidence processing must use real Mistral/Groq/Baseten credentials.'
+    detail: 'Production evidence processing must use real Mistral/Groq/Baseten credentials, including the general-image description endpoint.'
   });
   add(checks, {
     name: 'payment_provider',

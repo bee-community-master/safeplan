@@ -61,6 +61,12 @@ function ReadOnlyMeta({ card }: { card: EvidenceCardReviewDto }) {
         <dt className="font-bold text-ink">자동 태그 초안</dt>
         <dd className="text-muted">{joinOrFallback(tags, '태그 검토 필요')}</dd>
       </div>
+      {card.imageDescriptionKo && (
+        <div className="md:col-span-2">
+          <dt className="font-bold text-ink">일반 이미지 설명 초안</dt>
+          <dd className="text-muted">{card.imageDescriptionKo}</dd>
+        </div>
+      )}
     </dl>
   );
 }

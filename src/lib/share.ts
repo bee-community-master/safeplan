@@ -4,6 +4,7 @@ export type SharedReportCard = {
   dateCandidate: string | null;
   confidenceLevel: number;
   summaryKo: string;
+  imageDescriptionKo?: string | null;
 };
 
 export type SharedReportPayload = {

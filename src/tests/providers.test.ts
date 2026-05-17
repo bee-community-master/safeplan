@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { basetenResponseSchema } from '@/server/ai/providers/schema';
-import { mockClassify, mockOcr, mockStt } from '@/server/ai/providers/mock';
+import { mockClassify, mockDescribeImage, mockOcr, mockStt } from '@/server/ai/providers/mock';
 
 describe('provider mocks and parsing', () => {
   it('produces deterministic mock OCR/STT/classification drafts', async () => {
@@ -13,6 +13,7 @@ describe('provider mocks and parsing', () => {
       materialType: 'text_note',
       ocrMarkdown: ocr.markdown,
       transcript: stt.transcript,
+      imageDescriptionKo: null,
       userMemo: null,
       fileMetadata: { originalName: 'sample.txt', mimeType: 'text/plain', uploadedAt: new Date().toISOString() },
       allowedTags: ['경제적 통제']
@@ -31,6 +32,7 @@ describe('provider mocks and parsing', () => {
       materialType: 'capture',
       ocrMarkdown: ocr.markdown,
       transcript: null,
+      imageDescriptionKo: null,
       userMemo: null,
       fileMetadata: {
         originalName: 'capture.png',
@@ -53,6 +55,7 @@ describe('provider mocks and parsing', () => {
       materialType: 'photo',
       ocrMarkdown: '# IMG_20240418.jpg\n\n상담 전 자료 정리 초안',
       transcript: null,
+      imageDescriptionKo: null,
       userMemo: null,
       fileMetadata: {
         originalName: 'IMG_20240418.jpg',
@@ -65,6 +68,32 @@ describe('provider mocks and parsing', () => {
     });
 
     expect(card.dateCandidates).toEqual([{ date: '2024-04-18', source: 'metadata', confidence: 0.68 }]);
+  });
+
+  it('produces a mock image description draft without legal claims', async () => {
+    const description = await mockDescribeImage({ originalName: 'family_photo.jpg', materialType: 'photo', userMemo: '상담 전에 확인할 사진' });
+    const card = await mockClassify({
+      caseId: 'case_image_description',
+      fileId: 'file_image_description',
+      guardrailPolicy: 'test guardrail',
+      materialType: 'photo',
+      ocrMarkdown: null,
+      transcript: null,
+      imageDescriptionKo: description.descriptionKo,
+      userMemo: null,
+      fileMetadata: {
+        originalName: 'family_photo.jpg',
+        mimeType: 'image/jpeg',
+        uploadedAt: '2026-05-17T00:00:00.000Z',
+        imageAnalysisMode: 'description',
+        dateInferencePolicy: 'visual_capture_date_from_title_or_metadata_only'
+      },
+      allowedTags: ['기타/검토 필요']
+    });
+
+    expect(card.imageDescriptionKo).toContain('일반 사진 자료');
+    expect(card.summaryKo).toContain('일반 사진 자료');
+    expect(basetenResponseSchema.parse(card).imageDescriptionKo).toContain('일반 사진 자료');
   });
 
   it('rejects classifier output containing prohibited legal or outcome claims', () => {

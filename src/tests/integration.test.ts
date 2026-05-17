@@ -3,6 +3,7 @@ import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { CURRENT_CONSENT_VERSION } from '@/lib/consent';
+import { imageDescriptionFromDraft } from '@/lib/ai-draft';
 import { bytesFromMb } from '@/lib/evidence';
 import { createAnonymousCase } from '@/server/db/cases';
 import { updateDb, resetLocalDbCache, readDb, dataDir } from '@/server/db/local-store';
@@ -192,6 +193,34 @@ describe('local happy path services', () => {
     expect(card.dateSource).toBe('metadata');
     expect(JSON.stringify(card.aiDraftJson)).toContain('"sourceDetail":"filename"');
     expect(card.dateCandidate).not.toBe(new Date().toISOString().slice(0, 10));
+  });
+
+  it('routes ordinary photos to image descriptions and document-like images to OCR', async () => {
+    const caseRecord = await createAnonymousCase('session-image-routing');
+    const photoContent = Buffer.from('mock ordinary photo bytes');
+    const documentImageContent = Buffer.from('mock table document image bytes');
+    const files = await storeEvidenceFiles(caseRecord.id, [
+      { name: 'family_photo.jpg', mimeType: 'image/jpeg', sizeBytes: photoContent.byteLength, contentBase64: photoContent.toString('base64') },
+      { name: 'receipt_table.png', mimeType: 'image/png', sizeBytes: documentImageContent.byteLength, contentBase64: documentImageContent.toString('base64') }
+    ]);
+    const photoFile = files.find((file) => file.originalName === 'family_photo.jpg')!;
+    const documentImageFile = files.find((file) => file.originalName === 'receipt_table.png')!;
+    expect(photoFile.materialType).toBe('photo');
+    expect(documentImageFile.materialType).toBe('document');
+
+    await recordConsents(caseRecord.id);
+    await payCase(caseRecord.id);
+    await processCaseTimeline(caseRecord.id);
+
+    const db = await readDb();
+    const photoCard = db.evidenceCards.find((card) => card.fileId === photoFile.id)!;
+    const documentImageCard = db.evidenceCards.find((card) => card.fileId === documentImageFile.id)!;
+    expect(imageDescriptionFromDraft(photoCard.aiDraftJson)).toContain('일반 사진 자료');
+    expect(imageDescriptionFromDraft(documentImageCard.aiDraftJson)).toBeNull();
+    expect(db.extractionResults.some((result) => result.fileId === photoFile.id && result.kind === 'image_description')).toBe(true);
+    expect(db.extractionResults.some((result) => result.fileId === photoFile.id && result.kind === 'ocr')).toBe(false);
+    expect(db.extractionResults.some((result) => result.fileId === documentImageFile.id && result.kind === 'ocr')).toBe(true);
+    expect(db.extractionResults.some((result) => result.fileId === documentImageFile.id && result.kind === 'image_description')).toBe(false);
   });
 
   it('serves share links from an immutable report snapshot', async () => {
