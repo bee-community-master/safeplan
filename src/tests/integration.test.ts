@@ -1,11 +1,11 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { CURRENT_CONSENT_VERSION } from '@/lib/consent';
 import { bytesFromMb } from '@/lib/evidence';
 import { createAnonymousCase } from '@/server/db/cases';
-import { updateDb, resetLocalDbCache, readDb } from '@/server/db/local-store';
+import { updateDb, resetLocalDbCache, readDb, dataDir } from '@/server/db/local-store';
 import { storeEvidenceFiles, toEvidenceFileUploadSummary } from '@/server/files/local';
 import { createPaymentIntent, completeMockPayment, toPaymentStatusDto } from '@/server/payments/provider';
 import { enqueueProcessingJob, processCaseTimeline } from '@/server/ai/timeline-orchestrator';
@@ -22,6 +22,7 @@ beforeEach(async () => {
   process.env.SAFEPLAN_DATA_DIR = dir;
   process.env.AI_PROVIDER_MODE = 'mock';
   delete process.env.SAFEPLAN_TEST_REPORT_PERSIST_DELAY_MS;
+  delete process.env.SAFEPLAN_TEST_UPLOAD_PERSIST_DELAY_MS;
   resetLocalDbCache();
 });
 
@@ -36,6 +37,22 @@ async function recordConsents(caseId: string, consentTypes: Array<'sensitive_dat
 async function payCase(caseId: string) {
   const payment = await createPaymentIntent(caseId);
   return completeMockPayment(caseId, payment.paymentId);
+}
+
+async function listLocalObjectFiles(root = path.join(dataDir(), 'objects')): Promise<string[]> {
+  try {
+    const entries = await readdir(root, { withFileTypes: true });
+    const nested = await Promise.all(
+      entries.map((entry) => {
+        const fullPath = path.join(root, entry.name);
+        return entry.isDirectory() ? listLocalObjectFiles(fullPath) : Promise.resolve([fullPath]);
+      })
+    );
+    return nested.flat();
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    throw error;
+  }
 }
 
 describe('local happy path services', () => {
@@ -253,5 +270,35 @@ describe('local happy path services', () => {
     const db = await readDb();
     expect(db.evidenceCards.filter((card) => card.caseId === caseRecord.id && card.deletedAt === null)).toHaveLength(0);
     expect(db.extractionResults.some((extraction) => extraction.normalizedText?.includes('삭제 race 자료'))).toBe(false);
+  });
+
+  it('cleans up encrypted upload objects when deletion wins before upload persistence', async () => {
+    const caseRecord = await createAnonymousCase('session-upload-delete-race');
+    const content = Buffer.from('삭제 중 업로드된 자료');
+    process.env.SAFEPLAN_TEST_UPLOAD_PERSIST_DELAY_MS = '25';
+    const pendingUpload = storeEvidenceFiles(caseRecord.id, [{ name: 'race-upload.txt', mimeType: 'text/plain', sizeBytes: content.byteLength, contentBase64: content.toString('base64') }]);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await deleteCaseDeep(caseRecord.id);
+
+    await expect(pendingUpload).rejects.toThrow('case_not_found');
+    delete process.env.SAFEPLAN_TEST_UPLOAD_PERSIST_DELAY_MS;
+    const db = await readDb();
+    expect(db.evidenceFiles.filter((file) => file.caseId === caseRecord.id && file.deletedAt === null)).toHaveLength(0);
+    expect(await listLocalObjectFiles()).toHaveLength(0);
+  });
+
+  it('rejects payment and job mutations after a case is deleted', async () => {
+    const caseRecord = await createAnonymousCase('session-mutator-delete');
+    await recordConsents(caseRecord.id);
+    const payment = await createPaymentIntent(caseRecord.id);
+    await deleteCaseDeep(caseRecord.id);
+
+    await expect(completeMockPayment(caseRecord.id, payment.paymentId)).rejects.toThrow('case_not_found');
+    await expect(createPaymentIntent(caseRecord.id)).rejects.toThrow('case_not_found');
+    await expect(enqueueProcessingJob(caseRecord.id)).rejects.toThrow('case_not_found');
+
+    const db = await readDb();
+    expect(db.cases.find((item) => item.id === caseRecord.id)?.status).toBe('deleted');
+    expect(db.paymentIntents.find((item) => item.id === payment.paymentId)?.status).toBe('created');
   });
 });

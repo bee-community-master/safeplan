@@ -192,6 +192,24 @@ pnpm e2e:live
 - `pnpm e2e`: 통과 — happy path 1 passed, live-provider skipped
 - `pnpm e2e:live`: 통과 — live provider path 1 passed
 
+## 2026-05-17 repeated code-review pass 8 deletion-race update
+
+여덟 번째 architecture/QA 리뷰에서 나온 삭제 후 stale mutation blocker와 webhook 회귀 테스트 공백을 추가 반영했다.
+
+- `storeEvidenceFiles`, `createPaymentIntent`, `completeMockPayment`/Toss paid marking, consent 저장, job enqueue가 DB mutation 안에서 active case를 다시 확인한다.
+- 삭제는 먼저 DB tombstone/revoke/scrub을 완료하고, 그 mutation에서 캡처한 원본/PDF object 목록을 삭제해 삭제와 업로드가 겹쳐도 stale 암호화 객체가 남지 않게 했다.
+- Toss webhook은 삭제된 case의 결제 이벤트를 ignore하고 retrieve API를 호출하지 않으며, retrieve 결과가 DONE/orderId/금액과 일치할 때만 paid 처리한다.
+- 업로드-삭제 race, 삭제 후 결제/작업 mutation 거부, Toss webhook retrieve 호출 및 mismatch ignore 회귀 테스트를 추가했다.
+
+추가 검증:
+
+- `pnpm test src/tests/integration.test.ts src/tests/payments.test.ts`: 통과 — 2 files, 13 tests
+- `pnpm lint`: 통과
+- `pnpm test`: 통과 — 11 files, 29 tests
+- `rm -rf .next && pnpm build`: 통과 — 29 static pages
+- `pnpm e2e`: 통과 — happy path 1 passed, live-provider skipped
+- `pnpm e2e:live`: 통과 — live provider path 1 passed
+
 ## 2026-05-17 repeated code-review pass 2 hardening update
 
 두 번째 반복 리뷰에서 나온 privacy/security blocker를 추가 반영했다.

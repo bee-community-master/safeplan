@@ -16,6 +16,7 @@
 
 - `deleteCaseDeep(caseId)`는 케이스 soft delete, 원본 암호화 객체(GCS/local) 삭제, OCR/STT/AI 결과 비식별 삭제, 카드 삭제 마킹, PDF 객체 삭제, 공유 URL 폐기를 수행한다.
 - 삭제 후 DB에는 원본 파일명, 사용자 메모, object key, encrypted DEK, checksum, 카드 제목/날짜/AI 초안, report snapshot, share token/password hash가 남지 않도록 tombstone 값으로 스크럽한다.
+- 삭제와 업로드/결제/webhook/작업 요청이 겹쳐도 core mutator가 삭제 상태를 다시 확인하며, 삭제는 DB tombstone/revoke 후 캡처한 object 목록을 삭제해 stale 업로드 객체가 남지 않도록 한다.
 - 비민감 audit event는 타입, 카운트, 시간 등만 보관한다.
 - 사용자 화면에서는 삭제 전 확인 체크박스를 요구해 실수로 원본과 리포트를 삭제하는 일을 줄인다.
 

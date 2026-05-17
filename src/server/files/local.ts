@@ -1,7 +1,9 @@
 import 'server-only';
 import { LIMITS } from '@/lib/constants';
 import { bytesFromMb, inferMaterialType, validateUploadCandidates } from '@/lib/evidence';
+import { isProductionApp } from '@/lib/runtime';
 import type { EvidenceFileRecord, SafeplanDb } from '@/server/db/types';
+import { activeCaseOrThrow } from '@/server/db/cases';
 import { readDb, updateDb } from '@/server/db/local-store';
 import { decryptBuffer, encryptBuffer, id } from '@/server/security/crypto';
 import { deleteObject, readObject, writeObject } from './object-store';
@@ -63,6 +65,7 @@ function prepareUploadFiles(files: UploadInputFile[]): PreparedUploadFile[] {
 }
 
 function assertCaseUploadBudget(db: SafeplanDb, caseId: string, incoming: Array<{ sizeBytes: number }>): void {
+  activeCaseOrThrow(db, caseId);
   const existing = db.evidenceFiles.filter((file) => file.caseId === caseId && file.deletedAt === null);
   const nextCount = existing.length + incoming.length;
   if (nextCount > LIMITS.maxFilesPerCase) throw new Error(`자료는 한 묶음당 최대 ${LIMITS.maxFilesPerCase}개까지 업로드할 수 있습니다.`);
@@ -70,6 +73,11 @@ function assertCaseUploadBudget(db: SafeplanDb, caseId: string, incoming: Array<
   const existingBytes = existing.reduce((sum, file) => sum + file.sizeBytes, 0);
   const incomingBytes = incoming.reduce((sum, file) => sum + file.sizeBytes, 0);
   if (existingBytes + incomingBytes > bytesFromMb(LIMITS.maxTotalUploadMb)) throw new Error(`한 자료 묶음의 총 업로드 용량은 ${LIMITS.maxTotalUploadMb}MB를 넘을 수 없습니다.`);
+}
+
+function uploadPersistDelayMs(): number {
+  if (isProductionApp()) return 0;
+  return Number(process.env.SAFEPLAN_TEST_UPLOAD_PERSIST_DELAY_MS || 0);
 }
 
 export async function storeEvidenceFiles(caseId: string, files: UploadInputFile[]): Promise<EvidenceFileRecord[]> {
@@ -102,14 +110,14 @@ export async function storeEvidenceFiles(caseId: string, files: UploadInputFile[
   }
 
   try {
+    const delayMs = uploadPersistDelayMs();
+    if (delayMs > 0) await new Promise((resolve) => setTimeout(resolve, delayMs));
     await updateDb((db) => {
       assertCaseUploadBudget(db, caseId, records);
+      const caseRecord = activeCaseOrThrow(db, caseId);
       db.evidenceFiles.push(...records);
-      const caseRecord = db.cases.find((item) => item.id === caseId);
-      if (caseRecord) {
-        caseRecord.status = 'uploaded';
-        caseRecord.updatedAt = now;
-      }
+      caseRecord.status = 'uploaded';
+      caseRecord.updatedAt = now;
       db.auditEvents.push({
         id: id('audit'),
         userId: caseRecord?.userId ?? null,

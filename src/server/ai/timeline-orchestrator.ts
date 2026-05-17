@@ -4,6 +4,7 @@ import { AI_TAGS } from '@/lib/constants';
 import { isRealAiProviderMode } from '@/lib/runtime';
 import type { BasetenClassifierResponse } from '@/lib/types';
 import type { EvidenceFileRecord, ProcessingJobRecord } from '@/server/db/types';
+import { activeCaseOrThrow } from '@/server/db/cases';
 import { readDb, updateDb } from '@/server/db/local-store';
 import { readEvidencePlain } from '@/server/files/local';
 import { id } from '@/server/security/crypto';
@@ -76,6 +77,7 @@ async function extractText(file: EvidenceFileRecord): Promise<{ ocrMarkdown: str
 export async function enqueueProcessingJob(caseId: string): Promise<ProcessingJobRecord> {
   const now = new Date().toISOString();
   return updateDb((db) => {
+    const caseRecord = activeCaseOrThrow(db, caseId);
     const existing = db.processingJobs.find((job) => job.caseId === caseId && ['queued', 'processing'].includes(job.status));
     if (existing) return existing;
     const job: ProcessingJobRecord = {
@@ -90,7 +92,7 @@ export async function enqueueProcessingJob(caseId: string): Promise<ProcessingJo
       updatedAt: now
     };
     db.processingJobs.push(job);
-    db.auditEvents.push({ id: id('audit'), userId: db.cases.find((item) => item.id === caseId)?.userId ?? null, caseId, type: 'job.queued', metadataJson: { type: 'timeline' }, createdAt: now });
+    db.auditEvents.push({ id: id('audit'), userId: caseRecord.userId, caseId, type: 'job.queued', metadataJson: { type: 'timeline' }, createdAt: now });
     return job;
   });
 }

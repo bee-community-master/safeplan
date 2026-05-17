@@ -3,7 +3,7 @@ import type { ReportSnapshot } from '@/lib/share';
 import { deleteEvidenceObject } from '@/server/files/local';
 import { deleteReportObject } from '@/server/reports/report-service';
 import { id } from '@/server/security/crypto';
-import { readDb, updateDb } from './local-store';
+import { updateDb } from './local-store';
 
 export async function deleteCaseDeep(caseId: string): Promise<{
   deletedFiles: number;
@@ -12,12 +12,6 @@ export async function deleteCaseDeep(caseId: string): Promise<{
   revokedShares: number;
   deletedReports: number;
 }> {
-  const dbBefore = await readDb();
-  const files = dbBefore.evidenceFiles.filter((file) => file.caseId === caseId && file.deletedAt === null);
-  const reportsBefore = dbBefore.reports.filter((report) => report.caseId === caseId && report.deletedAt === null);
-  for (const file of files) await deleteEvidenceObject(file);
-  for (const report of reportsBefore) await deleteReportObject(report);
-
   const now = new Date().toISOString();
   const deletedSnapshot = (reportId: string): ReportSnapshot => ({
     version: 0,
@@ -27,18 +21,25 @@ export async function deleteCaseDeep(caseId: string): Promise<{
     fileCount: 0,
     cards: []
   });
-  return updateDb((db) => {
+  const deleted = await updateDb((db) => {
     const caseRecord = db.cases.find((item) => item.id === caseId);
     if (caseRecord) {
       caseRecord.status = 'deleted';
       caseRecord.deletedAt = now;
       caseRecord.updatedAt = now;
     }
+    const files = db.evidenceFiles.filter((file) => file.caseId === caseId);
+    const activeFiles = files.filter((file) => file.deletedAt === null);
+    const filesToDelete = activeFiles.map((file) => ({ ...file }));
+    const fileIds = new Set(files.map((file) => file.id));
+    const reports = db.reports.filter((item) => item.caseId === caseId);
+    const activeReports = reports.filter((report) => report.deletedAt === null);
+    const reportsToDelete = activeReports.map((report) => ({ ...report }));
     let deletedExtractions = 0;
     let deletedCards = 0;
     let deletedReports = 0;
     let revokedShares = 0;
-    for (const file of db.evidenceFiles.filter((item) => item.caseId === caseId)) {
+    for (const file of files) {
       if (!file.deletedAt) file.deletedAt = now;
       file.processingStatus = 'deleted';
       file.originalName = '삭제된 자료';
@@ -49,7 +50,7 @@ export async function deleteCaseDeep(caseId: string): Promise<{
       file.userMemo = null;
       file.materialType = 'unknown';
     }
-    for (const result of db.extractionResults.filter((item) => files.some((file) => file.id === item.fileId))) {
+    for (const result of db.extractionResults.filter((item) => fileIds.has(item.fileId))) {
       if (!result.deletedAt) {
         result.deletedAt = now;
         deletedExtractions += 1;
@@ -72,7 +73,6 @@ export async function deleteCaseDeep(caseId: string): Promise<{
       card.locationsJson = [];
       card.tagsJson = [];
     }
-    const reports = db.reports.filter((item) => item.caseId === caseId);
     for (const report of reports) {
       if (!report.deletedAt) {
         report.deletedAt = now;
@@ -100,9 +100,16 @@ export async function deleteCaseDeep(caseId: string): Promise<{
       userId: caseRecord?.userId ?? null,
       caseId,
       type: 'case.deleted',
-      metadataJson: { fileCount: files.length, reportCount: reports.length },
+      metadataJson: { fileCount: activeFiles.length, reportCount: activeReports.length },
       createdAt: now
     });
-    return { deletedFiles: files.length, deletedExtractions, deletedCards, revokedShares, deletedReports };
+    return {
+      result: { deletedFiles: activeFiles.length, deletedExtractions, deletedCards, revokedShares, deletedReports },
+      filesToDelete,
+      reportsToDelete
+    };
   });
+  await Promise.all(deleted.filesToDelete.map((file) => deleteEvidenceObject(file)));
+  await Promise.all(deleted.reportsToDelete.map((report) => deleteReportObject(report)));
+  return deleted.result;
 }

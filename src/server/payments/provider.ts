@@ -4,6 +4,7 @@ import { PRICE_KRW } from '@/lib/constants';
 import { isProductionApp } from '@/lib/runtime';
 import { appUrl } from '@/lib/url';
 import type { PaymentIntentRecord } from '@/server/db/types';
+import { activeCaseOrThrow } from '@/server/db/cases';
 import { readDb, updateDb } from '@/server/db/local-store';
 import { id } from '@/server/security/crypto';
 
@@ -95,6 +96,7 @@ export async function createPaymentIntent(caseId: string): Promise<PaymentIntent
   const provider = paymentProvider();
   const now = new Date().toISOString();
   const record = await updateDb((db) => {
+    const caseRecord = activeCaseOrThrow(db, caseId);
     assertPaymentConsent(caseId, db);
     const existing = db.paymentIntents.find((payment) => payment.caseId === caseId && payment.status !== 'cancelled');
     if (existing) return existing;
@@ -109,7 +111,7 @@ export async function createPaymentIntent(caseId: string): Promise<PaymentIntent
       paidAt: null
     };
     db.paymentIntents.push(payment);
-    db.auditEvents.push({ id: id('audit'), userId: db.cases.find((item) => item.id === caseId)?.userId ?? null, caseId, type: 'payment.created', metadataJson: { provider, amountKrw: PRICE_KRW }, createdAt: now });
+    db.auditEvents.push({ id: id('audit'), userId: caseRecord.userId, caseId, type: 'payment.created', metadataJson: { provider, amountKrw: PRICE_KRW }, createdAt: now });
     return payment;
   });
 
@@ -143,6 +145,7 @@ export async function createPaymentIntent(caseId: string): Promise<PaymentIntent
 async function markPaymentPaid(params: { caseId: string; paymentId: string; expectedProvider: 'mock' | 'toss'; providerPaymentKey: string }): Promise<PaymentIntentRecord> {
   const now = new Date().toISOString();
   return updateDb((db) => {
+    const caseRecord = activeCaseOrThrow(db, params.caseId);
     assertPaymentConsent(params.caseId, db);
     const payment = db.paymentIntents.find((item) => item.id === params.paymentId && item.caseId === params.caseId);
     if (!payment) throw new Error('payment_not_found');
@@ -155,11 +158,8 @@ async function markPaymentPaid(params: { caseId: string; paymentId: string; expe
     payment.status = 'paid';
     payment.providerPaymentKey = params.providerPaymentKey;
     payment.paidAt = now;
-    const caseRecord = db.cases.find((item) => item.id === params.caseId);
-    if (caseRecord) {
-      caseRecord.status = 'paid';
-      caseRecord.updatedAt = now;
-    }
+    caseRecord.status = 'paid';
+    caseRecord.updatedAt = now;
     db.auditEvents.push({
       id: id('audit'),
       userId: caseRecord?.userId ?? null,
@@ -194,7 +194,9 @@ async function markTossPaid(caseId: string, paymentId: string, paymentKey: strin
 export async function confirmTossPayment(input: TossConfirmInput): Promise<PaymentIntentRecord> {
   if (input.amount !== PRICE_KRW) throw new Error('payment_amount_mismatch');
   if (input.orderId !== input.paymentId) throw new Error('payment_order_mismatch');
-  assertPaymentConsent(input.caseId, await readDb());
+  const db = await readDb();
+  activeCaseOrThrow(db, input.caseId);
+  assertPaymentConsent(input.caseId, db);
   const { secretKey } = assertTossConfigured();
   await confirmWithToss(secretKey, { paymentKey: input.paymentKey, orderId: input.orderId, amount: input.amount });
   return markTossPaid(input.caseId, input.paymentId, input.paymentKey);
@@ -204,12 +206,17 @@ export async function handleTossWebhook(body: unknown): Promise<{ ok: boolean; i
   assertTossConfigured();
   const event = body as { eventType?: string; data?: { paymentKey?: string; orderId?: string; status?: string; totalAmount?: number } };
   if (event.eventType !== 'PAYMENT_STATUS_CHANGED' || !event.data?.paymentKey || !event.data.orderId) return { ok: true, ignored: true };
+  const db = await readDb();
+  const record = db.paymentIntents.find((item) => item.id === event.data?.orderId && item.provider === 'toss');
+  if (!record || !db.cases.some((item) => item.id === record.caseId && item.deletedAt === null)) return { ok: true, ignored: true };
   const { secretKey } = assertTossConfigured();
   const payment = await retrieveTossPayment(secretKey, event.data.paymentKey);
   if (payment.status !== 'DONE' || payment.orderId !== event.data.orderId || payment.totalAmount !== PRICE_KRW) return { ok: true, ignored: true };
-  const db = await readDb();
-  const record = db.paymentIntents.find((item) => item.id === event.data?.orderId && item.provider === 'toss');
-  if (!record) return { ok: true, ignored: true };
-  await markTossPaid(record.caseId, record.id, event.data.paymentKey);
+  try {
+    await markTossPaid(record.caseId, record.id, event.data.paymentKey);
+  } catch (error) {
+    if (error instanceof Error && error.message === 'case_not_found') return { ok: true, ignored: true };
+    throw error;
+  }
   return { ok: true };
 }

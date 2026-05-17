@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CURRENT_CONSENT_VERSION } from '@/lib/consent';
 import { createAnonymousCase } from '@/server/db/cases';
 import { readDb, resetLocalDbCache, updateDb } from '@/server/db/local-store';
+import { deleteCaseDeep } from '@/server/db/deletion';
 import { createPaymentIntent, handleTossWebhook } from '@/server/payments/provider';
 
 let dir: string;
@@ -44,7 +45,7 @@ async function createTossIntent(sessionId: string) {
       userAgentHash: null
     });
   });
-  return createPaymentIntent(caseRecord.id);
+  return { caseRecord, intent: await createPaymentIntent(caseRecord.id) };
 }
 
 function stubTossRetrieve(payment: { paymentKey: string; orderId: string; totalAmount: number; status: string }) {
@@ -55,7 +56,7 @@ function stubTossRetrieve(payment: { paymentKey: string; orderId: string; totalA
 
 describe('Toss webhook handling', () => {
   it('verifies general payment webhooks by retrieving the payment before marking paid', async () => {
-    const intent = await createTossIntent('session-payment-webhook');
+    const { intent } = await createTossIntent('session-payment-webhook');
     const fetchMock = stubTossRetrieve({ paymentKey: 'toss_payment_key', orderId: intent.paymentId, totalAmount: 9900, status: 'DONE' });
 
     await expect(handleTossWebhook({ eventType: 'PAYMENT_STATUS_CHANGED', data: { paymentKey: 'toss_payment_key', orderId: intent.paymentId } })).resolves.toEqual({ ok: true });
@@ -78,7 +79,7 @@ describe('Toss webhook handling', () => {
     ];
 
     for (const mismatch of mismatchCases) {
-      const intent = await createTossIntent(`session-${mismatch.paymentKey}`);
+      const { intent } = await createTossIntent(`session-${mismatch.paymentKey}`);
       stubTossRetrieve({ ...mismatch, orderId: mismatch.orderId === 'same' ? intent.paymentId : mismatch.orderId });
 
       await expect(
@@ -91,5 +92,17 @@ describe('Toss webhook handling', () => {
       const db = await readDb();
       expect(db.paymentIntents.find((item) => item.id === intent.paymentId)?.status).toBe('created');
     }
+  });
+
+  it('ignores verified Toss webhook events after a case has been deleted', async () => {
+    const { caseRecord, intent } = await createTossIntent('session-payment-delete');
+    await deleteCaseDeep(caseRecord.id);
+    const fetchMock = stubTossRetrieve({ paymentKey: 'toss_after_delete', orderId: intent.paymentId, totalAmount: 9900, status: 'DONE' });
+
+    await expect(handleTossWebhook({ eventType: 'PAYMENT_STATUS_CHANGED', data: { paymentKey: 'toss_after_delete', orderId: intent.paymentId } })).resolves.toEqual({ ok: true, ignored: true });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    const db = await readDb();
+    expect(db.paymentIntents.find((item) => item.id === intent.paymentId)?.status).toBe('created');
   });
 });

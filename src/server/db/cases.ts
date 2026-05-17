@@ -1,6 +1,6 @@
 import 'server-only';
 import { LIMITS } from '@/lib/constants';
-import type { CaseRecord, UserRecord } from './types';
+import type { CaseRecord, SafeplanDb, UserRecord } from './types';
 import { retentionUntil, updateDb } from './local-store';
 import { id } from '@/server/security/crypto';
 
@@ -50,4 +50,10 @@ export function toCaseSummary(caseRecord: CaseRecord) {
     createdAt: caseRecord.createdAt,
     updatedAt: caseRecord.updatedAt
   };
+}
+
+export function activeCaseOrThrow(db: SafeplanDb, caseId: string): CaseRecord {
+  const caseRecord = db.cases.find((item) => item.id === caseId && item.deletedAt === null);
+  if (!caseRecord) throw new Error('case_not_found');
+  return caseRecord;
 }
