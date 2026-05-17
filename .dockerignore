@@ -1,0 +1,10 @@
+node_modules
+.next
+.safeplan-data
+.env
+.env.*
+!.env.example
+.git
+playwright-report
+test-results
+coverage

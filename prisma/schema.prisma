@@ -1,0 +1,195 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String?
+  authProvider String
+  createdAt    DateTime @default(now())
+  cases        Case[]
+
+  @@map("safeplan_user")
+}
+
+model Case {
+  id             String           @id @default(cuid())
+  userId         String
+  user           User             @relation(fields: [userId], references: [id])
+  sessionId      String
+  title          String
+  status         String
+  retentionUntil DateTime
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  deletedAt      DateTime?
+  consents       ConsentRecord[]
+  evidenceFiles  EvidenceFile[]
+  cards          EvidenceCard[]
+  payments       PaymentIntent[]
+  reports        Report[]
+  jobs           ProcessingJob[]
+
+  @@index([sessionId])
+  @@index([userId])
+  @@map("safeplan_case")
+}
+
+model ConsentRecord {
+  id            String   @id @default(cuid())
+  caseId        String
+  case          Case     @relation(fields: [caseId], references: [id])
+  consentType   String
+  version       String
+  acceptedAt    DateTime
+  ipHash        String?
+  userAgentHash String?
+
+  @@index([caseId])
+  @@map("safeplan_consent_record")
+}
+
+model EvidenceFile {
+  id               String             @id @default(cuid())
+  caseId           String
+  case             Case               @relation(fields: [caseId], references: [id])
+  originalName     String
+  mimeType         String
+  sizeBytes        Int
+  gcsBucket        String
+  gcsObject        String
+  encryptedDek     String
+  checksumSha256   String
+  materialType     String
+  processingStatus String
+  userMemo         String?
+  uploadedAt       DateTime
+  deletedAt        DateTime?
+  results          ExtractionResult[]
+  cards            EvidenceCard[]
+
+  @@index([caseId])
+  @@map("safeplan_evidence_file")
+}
+
+model ExtractionResult {
+  id             String       @id @default(cuid())
+  fileId         String
+  file           EvidenceFile @relation(fields: [fileId], references: [id])
+  provider       String
+  kind           String
+  rawJson        Json
+  normalizedText String?
+  createdAt      DateTime     @default(now())
+  deletedAt      DateTime?
+
+  @@index([fileId])
+  @@map("safeplan_extraction_result")
+}
+
+model EvidenceCard {
+  id              String       @id @default(cuid())
+  caseId          String
+  case            Case         @relation(fields: [caseId], references: [id])
+  fileId          String
+  file            EvidenceFile @relation(fields: [fileId], references: [id])
+  title           String
+  summaryKo       String
+  materialType    String
+  dateCandidate   String?
+  dateSource      String?
+  peopleJson      Json
+  locationsJson   Json
+  tagsJson        Json
+  confidenceLevel Int
+  includeInReport Boolean      @default(false)
+  userConfirmed   Boolean      @default(false)
+  userMemo        String?
+  aiDraftJson     Json
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  deletedAt       DateTime?
+
+  @@index([caseId])
+  @@index([fileId])
+  @@map("safeplan_evidence_card")
+}
+
+model PaymentIntent {
+  id                 String    @id @default(cuid())
+  caseId             String
+  case               Case      @relation(fields: [caseId], references: [id])
+  provider           String
+  amountKrw          Int
+  status             String
+  providerPaymentKey String?
+  createdAt          DateTime  @default(now())
+  paidAt             DateTime?
+
+  @@index([caseId])
+  @@map("safeplan_payment_intent")
+}
+
+model Report {
+  id          String      @id @default(cuid())
+  caseId      String
+  case        Case        @relation(fields: [caseId], references: [id])
+  version     Int
+  pdfBucket   String
+  pdfObject   String
+  snapshotJson Json
+  generatedAt DateTime
+  deletedAt   DateTime?
+  shareLinks  ShareLink[]
+
+  @@index([caseId])
+  @@map("safeplan_report")
+}
+
+model ShareLink {
+  id           String    @id @default(cuid())
+  reportId     String
+  report       Report    @relation(fields: [reportId], references: [id])
+  tokenHash    String    @unique
+  passwordHash String?
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  accessCount  Int       @default(0)
+
+  @@index([reportId])
+  @@map("safeplan_share_link")
+}
+
+model AuditEvent {
+  id           String   @id @default(cuid())
+  userId       String?
+  caseId       String?
+  type         String
+  metadataJson Json
+  createdAt    DateTime @default(now())
+
+  @@index([caseId])
+  @@index([userId])
+  @@map("safeplan_audit_event")
+}
+
+model ProcessingJob {
+  id        String   @id @default(cuid())
+  caseId    String
+  case      Case     @relation(fields: [caseId], references: [id])
+  fileId    String?
+  type      String
+  status    String
+  attempts  Int      @default(0)
+  lastError String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([caseId])
+  @@map("safeplan_processing_job")
+}

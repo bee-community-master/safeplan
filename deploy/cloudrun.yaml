@@ -1,0 +1,119 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: safeplan-web
+  annotations:
+    run.googleapis.com/ingress: all
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: "0"
+        autoscaling.knative.dev/maxScale: "1"
+        run.googleapis.com/execution-environment: gen2
+        run.googleapis.com/cloudsql-instances: ${GCP_PROJECT_ID}:asia-northeast3:safeplan-postgres
+    spec:
+      containerConcurrency: 1
+      serviceAccountName: safeplan-cloudrun@${GCP_PROJECT_ID}.iam.gserviceaccount.com
+      containers:
+        - image: asia-northeast3-docker.pkg.dev/${GCP_PROJECT_ID}/safeplan/safeplan-web:latest
+          ports:
+            - containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /api/health/live
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /api/health/ready
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          env:
+            - name: APP_ENV
+              value: production
+            - name: SAFEPLAN_DB_BACKEND
+              value: prisma
+            - name: STORAGE_PROVIDER
+              value: gcs
+            - name: GCP_REGION
+              value: asia-northeast3
+            - name: PAYMENT_PROVIDER
+              value: toss
+            - name: AI_PROVIDER_MODE
+              value: real
+            - name: DB_TABLE_AND_SCHEMA_PREFIX
+              value: safeplan
+            - name: NEXT_PUBLIC_APP_URL
+              valueFrom:
+                secretKeyRef:
+                  name: safeplan-next-public-app-url
+                  key: latest
+            - name: APP_URL
+              valueFrom:
+                secretKeyRef:
+                  name: safeplan-next-public-app-url
+                  key: latest
+            - name: NEXT_PUBLIC_SUPPORT_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: safeplan-next-public-support-email
+                  key: latest
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: safeplan-database-url
+                  key: latest
+            - name: SESSION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: safeplan-session-secret
+                  key: latest
+            - name: MISTRAL_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: safeplan-mistral-api-key
+                  key: latest
+            - name: GROQ_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: safeplan-groq-api-key
+                  key: latest
+            - name: BASETEN_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: safeplan-baseten-api-key
+                  key: latest
+            - name: BASETEN_CLASSIFIER_URL
+              valueFrom:
+                secretKeyRef:
+                  name: safeplan-baseten-classifier-url
+                  key: latest
+            - name: TOSS_CLIENT_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: safeplan-toss-client-key
+                  key: latest
+            - name: TOSS_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: safeplan-toss-secret-key
+                  key: latest
+            - name: KMS_KEY_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: safeplan-kms-key-name
+                  key: latest
+            - name: ENVELOPE_MASTER_KEY_BASE64
+              valueFrom:
+                secretKeyRef:
+                  name: safeplan-envelope-master-key
+                  key: latest
+            - name: GCS_BUCKET_ORIGINALS
+              value: ${GCP_PROJECT_ID}-safeplan-originals
+            - name: GCS_BUCKET_DERIVED
+              value: ${GCP_PROJECT_ID}-safeplan-derived
+            - name: GCS_BUCKET_REPORTS
+              value: ${GCP_PROJECT_ID}-safeplan-reports
