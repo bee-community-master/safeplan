@@ -22,6 +22,51 @@ describe('provider mocks and parsing', () => {
     expect(basetenResponseSchema.parse(card).confidenceLevel).toBeGreaterThanOrEqual(3);
   });
 
+  it('does not invent capture dates for visual mock files without filename or metadata dates', async () => {
+    const ocr = await mockOcr({ originalName: 'capture.png', mimeType: 'image/png', content: Buffer.from('mock image') });
+    const card = await mockClassify({
+      caseId: 'case_visual',
+      fileId: 'file_visual',
+      guardrailPolicy: 'test guardrail',
+      materialType: 'capture',
+      ocrMarkdown: ocr.markdown,
+      transcript: null,
+      userMemo: null,
+      fileMetadata: {
+        originalName: 'capture.png',
+        mimeType: 'image/png',
+        uploadedAt: '2026-05-17T00:00:00.000Z',
+        captureDateCandidate: null,
+        dateInferencePolicy: 'visual_capture_date_from_title_or_metadata_only'
+      },
+      allowedTags: ['기타/검토 필요']
+    });
+
+    expect(card.dateCandidates).toEqual([]);
+  });
+
+  it('uses visual filename or metadata capture date candidates in mock classification', async () => {
+    const card = await mockClassify({
+      caseId: 'case_visual_meta',
+      fileId: 'file_visual_meta',
+      guardrailPolicy: 'test guardrail',
+      materialType: 'photo',
+      ocrMarkdown: '# IMG_20240418.jpg\n\n상담 전 자료 정리 초안',
+      transcript: null,
+      userMemo: null,
+      fileMetadata: {
+        originalName: 'IMG_20240418.jpg',
+        mimeType: 'image/jpeg',
+        uploadedAt: '2026-05-17T00:00:00.000Z',
+        captureDateCandidate: { date: '2024-04-18', source: 'metadata', confidence: 0.68, sourceDetail: 'filename' },
+        dateInferencePolicy: 'visual_capture_date_from_title_or_metadata_only'
+      },
+      allowedTags: ['기타/검토 필요']
+    });
+
+    expect(card.dateCandidates).toEqual([{ date: '2024-04-18', source: 'metadata', confidence: 0.68 }]);
+  });
+
   it('rejects classifier output containing prohibited legal or outcome claims', () => {
     expect(() =>
       basetenResponseSchema.parse({

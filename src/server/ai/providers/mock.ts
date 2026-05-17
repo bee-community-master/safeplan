@@ -1,12 +1,13 @@
 import 'server-only';
 import { AI_TAGS } from '@/lib/constants';
+import { extractDateCandidateFromText, isVisualEvidence } from '@/lib/evidence-date';
 import type { BasetenClassifierInput, BasetenClassifierResponse, MaterialType } from '@/lib/types';
 
 export async function mockOcr(input: { originalName: string; mimeType: string; content: Buffer }): Promise<{ markdown: string; raw: unknown }> {
   const text = input.mimeType === 'text/plain' ? input.content.toString('utf8') : '';
   const markdown = text.trim()
     ? `# ${input.originalName}\n\n${text.trim()}`
-    : `# ${input.originalName}\n\n날짜: 2026-05-01. 상담 전 자료 정리를 위한 초안 텍스트입니다.`;
+    : `# ${input.originalName}\n\n상담 전 자료 정리를 위한 초안 텍스트입니다.`;
   return { markdown, raw: { provider: 'mock', markdown, degraded: false } };
 }
 
@@ -27,6 +28,37 @@ function detectTag(text: string): (typeof AI_TAGS)[number] {
   return '기타/검토 필요';
 }
 
+function firstTextDateCandidate(input: BasetenClassifierInput): BasetenClassifierResponse['dateCandidates'][number] | null {
+  const sources = [
+    { text: input.userMemo, source: 'user' as const, confidence: 0.72 },
+    { text: input.ocrMarkdown, source: 'ocr' as const, confidence: 0.66 },
+    { text: input.transcript, source: 'inferred' as const, confidence: 0.58 }
+  ];
+  for (const candidateSource of sources) {
+    if (!candidateSource.text) continue;
+    const candidate = extractDateCandidateFromText(candidateSource.text, candidateSource.confidence);
+    if (candidate) return { date: candidate.date, source: candidateSource.source, confidence: candidate.confidence };
+  }
+  return null;
+}
+
+function mockDateCandidates(input: BasetenClassifierInput): BasetenClassifierResponse['dateCandidates'] {
+  const metadataCandidate = input.fileMetadata.captureDateCandidate;
+  if (metadataCandidate) {
+    return [{ date: metadataCandidate.date, source: 'metadata', confidence: metadataCandidate.confidence }];
+  }
+
+  const textCandidate = firstTextDateCandidate(input);
+  if (textCandidate) return [textCandidate];
+
+  const visual = isVisualEvidence({ mimeType: input.fileMetadata.mimeType, materialType: input.materialType });
+  if (visual || input.fileMetadata.dateInferencePolicy === 'visual_capture_date_from_title_or_metadata_only') {
+    return [];
+  }
+
+  return [];
+}
+
 export async function mockClassify(input: BasetenClassifierInput): Promise<BasetenClassifierResponse> {
   const normalized = [input.ocrMarkdown, input.transcript, input.userMemo].filter(Boolean).join('\n');
   const tag = detectTag(normalized || input.fileMetadata.originalName);
@@ -37,7 +69,7 @@ export async function mockClassify(input: BasetenClassifierInput): Promise<Baset
       ? `자동 정리 초안: ${normalized.slice(0, 220)}${normalized.length > 220 ? '…' : ''}`
       : '자동 정리 초안: 파일명과 기본 정보를 기준으로 생성한 검토 필요 자료입니다.',
     materialType: input.materialType as MaterialType,
-    dateCandidates: [{ date: '2026-05-01', source: 'inferred', confidence: 0.55 }],
+    dateCandidates: mockDateCandidates(input),
     people: [{ label: '미상', rawMention: '자료 내 인물', confidence: 0.3 }],
     locations: [],
     tags: [{ tag, confidence: 0.72, rationale: '키워드와 파일 내용을 기준으로 태그 초안을 선택했습니다.' }],

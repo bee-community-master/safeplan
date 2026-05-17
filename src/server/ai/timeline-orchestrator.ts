@@ -1,12 +1,14 @@
 import 'server-only';
 import { CURRENT_CONSENT_VERSION, REQUIRED_AI_CONSENT_TYPES, hasCurrentConsents } from '@/lib/consent';
 import { AI_TAGS } from '@/lib/constants';
+import { chooseFileDateCandidate, extractDateCandidateFromFileName, isVisualEvidence, sanitizeEvidenceDateCandidates } from '@/lib/evidence-date';
 import { isRealAiProviderMode } from '@/lib/runtime';
 import type { BasetenClassifierResponse } from '@/lib/types';
 import type { EvidenceFileRecord, ProcessingJobRecord } from '@/server/db/types';
 import { activeCaseOrThrow } from '@/server/db/cases';
 import { readDb, updateDb } from '@/server/db/local-store';
 import { readEvidencePlain } from '@/server/files/local';
+import { extractCaptureDateFromImageMetadata } from '@/server/files/photo-date';
 import { id } from '@/server/security/crypto';
 import { basetenClassify } from './providers/baseten-classifier';
 import { groqStt } from './providers/groq-stt';
@@ -15,7 +17,7 @@ import { mockClassify, mockOcr, mockStt } from './providers/mock';
 import { isProviderMissingCredentialError } from './providers/schema';
 
 const CLASSIFIER_GUARDRAIL_POLICY =
-  '한국어 상담자료 준비용 초안만 생성합니다. 법률 자문, 승소/패소 예측, 이혼 권유, 심리/의학 진단, 불법 자료 수집 안내, 무단 접근/해킹/위치추적/몰래 설치, 진정성 판단, 증거능력/법적 효력/법원 제출 가능성 단정을 하지 마세요. 모든 요약/태그/날짜/인물은 사용자가 확인해야 하는 초안이라고 표현하세요.';
+  '한국어 상담자료 준비용 초안만 생성합니다. 법률 자문, 승소/패소 예측, 이혼 권유, 심리/의학 진단, 불법 자료 수집 안내, 무단 접근/해킹/위치추적/몰래 설치, 진정성 판단, 증거능력/법적 효력/법원 제출 가능성 단정을 하지 마세요. 사진/캡처 자료는 업로드일이나 오늘 날짜를 촬영일로 추정하지 말고 파일명, 이미지 메타데이터, 명시적으로 읽힌 날짜가 있을 때만 날짜 후보를 내세요. 모든 요약/태그/날짜/인물은 사용자가 확인해야 하는 초안이라고 표현하세요.';
 const PROCESSING_LEASE_MS = 15 * 60 * 1000;
 
 function warnProviderDegraded(provider: 'baseten' | 'groq' | 'mistral', error: unknown): void {
@@ -44,34 +46,35 @@ async function classifyWithFallback(input: Parameters<typeof mockClassify>[0]): 
   return { result, provider: 'mock', degraded: isRealAiProviderMode(), raw: result };
 }
 
-async function extractText(file: EvidenceFileRecord): Promise<{ ocrMarkdown: string | null; transcript: string | null; degraded: boolean; extractionRaw: Array<{ provider: 'mistral' | 'groq' | 'mock'; kind: 'ocr' | 'stt'; raw: unknown; text: string }> }> {
+async function extractText(file: EvidenceFileRecord): Promise<{ ocrMarkdown: string | null; transcript: string | null; degraded: boolean; captureDateMetadata: ReturnType<typeof extractCaptureDateFromImageMetadata>; extractionRaw: Array<{ provider: 'mistral' | 'groq' | 'mock'; kind: 'ocr' | 'stt'; raw: unknown; text: string }> }> {
   const content = await readEvidencePlain(file);
+  const captureDateMetadata = extractCaptureDateFromImageMetadata({ content, mimeType: file.mimeType });
   if (file.mimeType === 'text/plain') {
     const text = content.toString('utf8');
-    return { ocrMarkdown: text, transcript: null, degraded: false, extractionRaw: [{ provider: 'mock', kind: 'ocr', raw: { textMode: true }, text }] };
+    return { ocrMarkdown: text, transcript: null, degraded: false, captureDateMetadata, extractionRaw: [{ provider: 'mock', kind: 'ocr', raw: { textMode: true }, text }] };
   }
   if (file.mimeType.startsWith('audio/')) {
     if (isRealAiProviderMode()) {
       try {
         const result = await groqStt({ content, mimeType: file.mimeType, originalName: file.originalName });
-        return { ocrMarkdown: null, transcript: result.transcript, degraded: false, extractionRaw: [{ provider: 'groq', kind: 'stt', raw: result.raw, text: result.transcript }] };
+        return { ocrMarkdown: null, transcript: result.transcript, degraded: false, captureDateMetadata, extractionRaw: [{ provider: 'groq', kind: 'stt', raw: result.raw, text: result.transcript }] };
       } catch (error) {
         warnProviderDegraded('groq', error);
       }
     }
     const mock = await mockStt({ originalName: file.originalName });
-    return { ocrMarkdown: null, transcript: mock.transcript, degraded: isRealAiProviderMode(), extractionRaw: [{ provider: 'mock', kind: 'stt', raw: mock.raw, text: mock.transcript }] };
+    return { ocrMarkdown: null, transcript: mock.transcript, degraded: isRealAiProviderMode(), captureDateMetadata, extractionRaw: [{ provider: 'mock', kind: 'stt', raw: mock.raw, text: mock.transcript }] };
   }
   if (isRealAiProviderMode()) {
     try {
       const result = await mistralOcr({ content, mimeType: file.mimeType, originalName: file.originalName });
-      return { ocrMarkdown: result.markdown, transcript: null, degraded: false, extractionRaw: [{ provider: 'mistral', kind: 'ocr', raw: result.raw, text: result.markdown }] };
+      return { ocrMarkdown: result.markdown, transcript: null, degraded: false, captureDateMetadata, extractionRaw: [{ provider: 'mistral', kind: 'ocr', raw: result.raw, text: result.markdown }] };
     } catch (error) {
       warnProviderDegraded('mistral', error);
     }
   }
   const mock = await mockOcr({ content, mimeType: file.mimeType, originalName: file.originalName });
-  return { ocrMarkdown: mock.markdown, transcript: null, degraded: isRealAiProviderMode(), extractionRaw: [{ provider: 'mock', kind: 'ocr', raw: mock.raw, text: mock.markdown }] };
+  return { ocrMarkdown: mock.markdown, transcript: null, degraded: isRealAiProviderMode(), captureDateMetadata, extractionRaw: [{ provider: 'mock', kind: 'ocr', raw: mock.raw, text: mock.markdown }] };
 }
 
 export async function enqueueProcessingJob(caseId: string): Promise<ProcessingJobRecord> {
@@ -143,6 +146,7 @@ export async function processCaseTimeline(caseId: string): Promise<{ job: Proces
     if (existing) continue;
     const extracted = await extractText(file);
     providerDegraded = providerDegraded || extracted.degraded;
+    const captureDateCandidate = chooseFileDateCandidate([extracted.captureDateMetadata, extractDateCandidateFromFileName(file.originalName)]);
     const classification = await classifyWithFallback({
       caseId,
       fileId: file.id,
@@ -151,10 +155,22 @@ export async function processCaseTimeline(caseId: string): Promise<{ job: Proces
       ocrMarkdown: extracted.ocrMarkdown,
       transcript: extracted.transcript,
       userMemo: file.userMemo,
-      fileMetadata: { originalName: file.originalName, mimeType: file.mimeType, uploadedAt: file.uploadedAt },
+      fileMetadata: {
+        originalName: file.originalName,
+        mimeType: file.mimeType,
+        uploadedAt: file.uploadedAt,
+        captureDateCandidate,
+        dateInferencePolicy: isVisualEvidence(file) ? 'visual_capture_date_from_title_or_metadata_only' : 'standard'
+      },
       allowedTags: AI_TAGS
     });
     providerDegraded = providerDegraded || classification.degraded;
+    const dateCandidates = sanitizeEvidenceDateCandidates({
+      providerCandidates: classification.result.dateCandidates,
+      fileDateCandidate: captureDateCandidate,
+      context: { originalName: file.originalName, mimeType: file.mimeType, materialType: file.materialType, uploadedAt: file.uploadedAt }
+    });
+    const classificationResult = { ...classification.result, dateCandidates };
     const now = new Date().toISOString();
     const created = await updateDb((db) => {
       const activeCase = db.cases.find((item) => item.id === caseId && item.deletedAt === null);
@@ -181,28 +197,28 @@ export async function processCaseTimeline(caseId: string): Promise<{ job: Proces
         provider: classification.provider,
         kind: 'classification',
         rawJson: classification.raw,
-        normalizedText: classification.result.summaryKo,
+        normalizedText: classificationResult.summaryKo,
         createdAt: now,
         deletedAt: null
       });
-      const firstDate = classification.result.dateCandidates[0];
+      const firstDate = classificationResult.dateCandidates[0];
       db.evidenceCards.push({
         id: id('card'),
         caseId,
         fileId: file.id,
-        title: classification.result.title,
-        summaryKo: classification.result.summaryKo,
-        materialType: classification.result.materialType,
+        title: classificationResult.title,
+        summaryKo: classificationResult.summaryKo,
+        materialType: classificationResult.materialType,
         dateCandidate: firstDate?.date ?? null,
         dateSource: firstDate?.source ?? null,
-        peopleJson: classification.result.people,
-        locationsJson: classification.result.locations,
-        tagsJson: classification.result.tags,
-        confidenceLevel: classification.result.confidenceLevel,
-        includeInReport: classification.result.includeInReportDefault,
+        peopleJson: classificationResult.people,
+        locationsJson: classificationResult.locations,
+        tagsJson: classificationResult.tags,
+        confidenceLevel: classificationResult.confidenceLevel,
+        includeInReport: classificationResult.includeInReportDefault,
         userConfirmed: false,
         userMemo: file.userMemo,
-        aiDraftJson: { ...classification.result, draft: true, provider: classification.provider, providerDegraded: classification.degraded },
+        aiDraftJson: { ...classificationResult, draft: true, provider: classification.provider, providerDegraded: classification.degraded, captureDateCandidate },
         createdAt: now,
         updatedAt: now,
         deletedAt: null

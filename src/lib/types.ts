@@ -49,6 +49,13 @@ export interface BasetenClassifierInput {
     originalName: string;
     mimeType: string;
     uploadedAt: string;
+    captureDateCandidate?: {
+      date: string;
+      source: 'metadata';
+      confidence: number;
+      sourceDetail: 'filename' | 'exif_datetime_original' | 'exif_datetime_digitized' | 'exif_datetime';
+    } | null;
+    dateInferencePolicy?: 'visual_capture_date_from_title_or_metadata_only' | 'standard';
   };
   allowedTags: readonly string[];
 }
