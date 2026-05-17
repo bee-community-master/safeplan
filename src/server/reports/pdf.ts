@@ -2,27 +2,38 @@ import 'server-only';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { PDFDocument, type PDFFont, rgb } from 'pdf-lib';
 import { LEGAL_CAUTION_COPY } from '@/lib/constants';
 import type { CaseRecord, EvidenceCardRecord, EvidenceFileRecord } from '@/server/db/types';
+
+export function koreanPdfFontCandidates(): string[] {
+  const candidates: string[] = [];
+  if (process.env.SAFEPLAN_PDF_FONT_PATH) candidates.push(process.env.SAFEPLAN_PDF_FONT_PATH);
+  candidates.push(
+    path.join(process.cwd(), 'src/server/reports/fonts/GothicA1_400Regular.ttf'),
+    '/System/Library/Fonts/Supplemental/AppleGothic.ttf',
+    '/Library/Fonts/AppleGothic.ttf',
+    '/usr/share/fonts/truetype/noto/NotoSansKR-Regular.ttf',
+    '/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc',
+    '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
+    '/usr/share/fonts/opentype/noto/NotoSansCJKkr-Regular.otf'
+  );
+  return candidates;
+}
 
 async function loadKoreanFont(doc: PDFDocument) {
   const require = createRequire(import.meta.url);
   const fontkit = require('@pdf-lib/fontkit');
   doc.registerFontkit((fontkit.default ?? fontkit) as Parameters<typeof doc.registerFontkit>[0]);
-  const candidates = [
-    path.join(process.cwd(), 'node_modules/@fontsource/noto-sans-kr/files/noto-sans-kr-korean-400-normal.woff2'),
-    path.join(process.cwd(), 'node_modules/@fontsource/noto-sans-kr/files/noto-sans-kr-korean-400-normal.woff'),
-    path.join(process.cwd(), 'node_modules/@fontsource/noto-sans-kr/files/noto-sans-kr-kr-400-normal.woff2')
-  ];
+  const candidates = koreanPdfFontCandidates();
   for (const candidate of candidates) {
     try {
-      return await doc.embedFont(new Uint8Array(await readFile(candidate)));
+      return await doc.embedFont(new Uint8Array(await readFile(candidate)), { subset: false });
     } catch (error) {
       if (process.env.SAFEPLAN_DEBUG_PDF_FONT === '1') console.error('pdf_font_load_failed', candidate, error);
     }
   }
-  return doc.embedStandardFont(StandardFonts.Helvetica);
+  throw new Error('pdf_korean_font_unavailable');
 }
 
 function formatBytes(bytes: number): string {
@@ -39,17 +50,19 @@ function displayFileType(mimeType: string): string {
   return '파일';
 }
 
-function wrapText(text: string, width = 58): string[] {
+function wrapText(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
   const normalized = text.replace(/\r/g, '').split('\n');
   const lines: string[] = [];
   for (const paragraph of normalized) {
     let line = '';
     for (const char of paragraph) {
-      if (line.length >= width) {
-        lines.push(line);
-        line = '';
+      const candidate = `${line}${char}`;
+      if (line && font.widthOfTextAtSize(candidate, size) > maxWidth) {
+        lines.push(line.trimEnd());
+        line = char.trimStart();
+      } else {
+        line = candidate;
       }
-      line += char;
     }
     lines.push(line || ' ');
   }
@@ -75,9 +88,10 @@ export async function generateReportPdf(input: { caseRecord: CaseRecord; cards: 
   const font = await loadKoreanFont(doc);
   let page = doc.addPage([595, 842]);
   const margin = 48;
+  const maxTextWidth = page.getWidth() - margin * 2;
   let y = 790;
   const draw = (text: string, size = 11, color = rgb(0.1, 0.12, 0.14)) => {
-    for (const line of wrapText(text, size >= 16 ? 36 : 66)) {
+    for (const line of wrapText(text, font, size, maxTextWidth)) {
       if (y < 70) {
         page = doc.addPage([595, 842]);
         y = 790;
