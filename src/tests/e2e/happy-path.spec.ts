@@ -17,15 +17,15 @@ test('safeplan local mock happy path', async ({ page, context }) => {
   await page.getByRole('button', { name: '암호화 업로드 완료' }).click();
   await expect(page.getByRole('status')).toContainText('업로드가 완료');
 
-  for (const label of ['민감정보 처리에 동의합니다.', '원본 자료 처리에 동의합니다.', '외부 AI/OCR/STT provider 처리에 동의합니다.', '가능한 해외/제3자 처리에 동의합니다.', '9,900원 결제에 동의합니다.']) {
+  for (const label of ['민감정보 처리에 동의합니다.', '원본 자료 처리에 동의합니다.', '자료 정리를 위한 외부 분석 서비스 처리에 동의합니다.', '가능한 해외/제3자 처리에 동의합니다.', '9,900원 결제에 동의합니다.']) {
     await page.getByLabel(label).check();
   }
   await page.getByRole('button', { name: '동의 기록' }).click();
-  await expect(page.getByRole('status')).toContainText('동의가 기록');
+  await expect(page.getByRole('status')).toContainText('동의가 안전하게 저장');
   await page.getByRole('button', { name: '9,900원 결제' }).click();
-  await expect(page.getByRole('status')).toContainText('mock 결제가 완료');
-  await page.getByRole('button', { name: 'OCR/STT/AI 초안 처리' }).click();
-  await expect(page.getByText('AI 초안 카드 검수')).toBeVisible();
+  await expect(page.getByRole('status')).toContainText('결제가 완료');
+  await page.getByRole('button', { name: '자료 정리 시작' }).click();
+  await expect(page.getByText('자료 카드 검토')).toBeVisible();
 
   const cards = page.getByTestId('evidence-card');
   await expect(cards.first()).toBeVisible();
@@ -34,14 +34,14 @@ test('safeplan local mock happy path', async ({ page, context }) => {
   for (let index = 0; index < count; index += 1) {
     const card = cards.nth(index);
     await card.getByLabel('사용자가 확인했습니다').check();
-    await card.getByLabel('PDF에 포함').check();
+    await card.getByLabel('리포트에 포함').check();
     await card.getByRole('button', { name: '카드 저장' }).click();
   }
   await page.getByRole('button', { name: '리포트 생성으로 이동' }).click();
-  await page.getByRole('button', { name: 'PDF 리포트 생성' }).click();
-  await expect(page.getByRole('status')).toContainText('PDF 리포트가 생성');
-  await page.getByRole('button', { name: '보안 URL 생성' }).click();
-  await expect(page.getByRole('status')).toContainText('보안 URL');
+  await page.getByRole('button', { name: '리포트 생성' }).click();
+  await expect(page.getByRole('status')).toContainText('리포트가 생성');
+  await page.getByRole('button', { name: '보안 링크 생성' }).click();
+  await expect(page.getByRole('status')).toContainText('보안 링크');
   const shareUrl = await page.getByRole('link', { name: /\/share\// }).textContent();
   expect(shareUrl).toContain('/share/');
 
@@ -50,6 +50,6 @@ test('safeplan local mock happy path', async ({ page, context }) => {
   await expect(sharePage.getByTestId('share-report')).toContainText('자료 타임라인');
   await sharePage.close();
 
-  await page.getByRole('button', { name: '케이스 삭제' }).click();
-  await expect(page.getByRole('status')).toContainText('삭제 또는 비활성화');
+  await page.getByRole('button', { name: '자료 전체 삭제' }).click();
+  await expect(page.getByRole('status')).toContainText('삭제');
 });

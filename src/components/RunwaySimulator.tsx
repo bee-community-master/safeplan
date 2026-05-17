@@ -70,7 +70,7 @@ export function RunwaySimulator() {
       <div className="flex flex-col justify-between gap-4 md:flex-row">
         <div>
           <h1 className="text-3xl font-bold">생존 시뮬레이터</h1>
-          <p className="mt-2 text-stone-700">계산은 브라우저에서만 수행되며 서버로 전송되지 않습니다. 저장은 사용자가 “이 기기에 저장”을 누른 뒤에만 localStorage에 남습니다.</p>
+          <p className="mt-2 text-stone-700">계산은 이 기기 안에서만 수행되며 서버로 전송되지 않습니다. 저장은 사용자가 “이 기기에 저장”을 누른 뒤에만 이 브라우저에 남습니다.</p>
         </div>
         <div className="flex flex-wrap gap-2 text-sm">
           <button className="rounded-xl border px-3 py-2" onClick={loadLocal}>이 기기 값 불러오기</button>

@@ -25,6 +25,20 @@ async function loadKoreanFont(doc: PDFDocument) {
   return doc.embedStandardFont(StandardFonts.Helvetica);
 }
 
+function formatBytes(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)}KB`;
+  return `${bytes}B`;
+}
+
+function displayFileType(mimeType: string): string {
+  if (mimeType.startsWith('image/')) return '이미지';
+  if (mimeType === 'application/pdf') return 'PDF';
+  if (mimeType === 'text/plain') return '텍스트';
+  if (mimeType.startsWith('audio/')) return '음성';
+  return '파일';
+}
+
 function wrapText(text: string, width = 58): string[] {
   const normalized = text.replace(/\r/g, '').split('\n');
   const lines: string[] = [];
@@ -68,10 +82,10 @@ export async function generateReportPdf(input: { caseRecord: CaseRecord; cards: 
   draw(`자료 수: ${input.cards.length}개 / 원본 파일: ${input.files.length}개`);
   const tags = input.cards.flatMap((card) => (Array.isArray(card.tagsJson) ? card.tagsJson : []) as Array<{ tag?: string }>).map((tag) => tag.tag).filter(Boolean);
   draw(`주요 태그: ${tags.join(', ') || '검토 필요'}`);
-  draw(`Confidence 분포: ${[1, 2, 3, 4, 5].map((level) => `${level}:${input.cards.filter((card) => card.confidenceLevel === level).length}`).join(' / ')}`);
+  draw(`추출 신뢰도 분포: ${[1, 2, 3, 4, 5].map((level) => `${level}:${input.cards.filter((card) => card.confidenceLevel === level).length}`).join(' / ')}`);
   draw('4. 자료 타임라인', 15);
   for (const card of input.cards) {
-    draw(`- ${card.dateCandidate || '날짜 미상'} | ${card.title} | confidence ${card.confidenceLevel}`);
+    draw(`- ${card.dateCandidate || '날짜 미상'} | ${card.title} | 추출 신뢰도 ${card.confidenceLevel}단계`);
     draw(card.summaryKo);
     if (card.userMemo) draw(`사용자 메모: ${card.userMemo}`);
   }
@@ -80,7 +94,7 @@ export async function generateReportPdf(input: { caseRecord: CaseRecord; cards: 
   draw('8. 확인 필요 자료', 15);
   for (const card of input.cards.filter((item) => item.confidenceLevel <= 3)) draw(`- ${card.title}: 사용자의 추가 확인 필요`);
   draw('9. 원본 파일 목록', 15);
-  for (const file of input.files) draw(`- ${file.originalName} (${file.mimeType}, ${file.sizeBytes} bytes)`);
+  for (const file of input.files) draw(`- ${file.originalName} (${displayFileType(file.mimeType)}, ${formatBytes(file.sizeBytes)})`);
   draw('10. 주의 문구', 15);
   draw(LEGAL_CAUTION_COPY);
 

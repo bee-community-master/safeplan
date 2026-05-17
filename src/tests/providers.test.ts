@@ -16,7 +16,7 @@ describe('provider mocks and parsing', () => {
       fileMetadata: { originalName: 'sample.txt', mimeType: 'text/plain', uploadedAt: new Date().toISOString() },
       allowedTags: ['경제적 통제']
     });
-    expect(card.summaryKo).toContain('AI 초안');
+    expect(card.summaryKo).toContain('자동 정리 초안');
     expect(card.tags[0]?.tag).toBe('경제적 통제');
     expect(basetenResponseSchema.parse(card).confidenceLevel).toBeGreaterThanOrEqual(3);
   });

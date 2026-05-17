@@ -13,6 +13,13 @@ declare global {
   }
 }
 
+
+function friendlyClientError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/sdk|toss|payment_config|confirm|failed|_/.test(message)) return '결제 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.';
+  return message;
+}
+
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -55,7 +62,7 @@ export function EvidenceUploadFlow({ caseId }: { caseId: string }) {
     if (confirmationStarted.current || typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
     if (params.get('payment') === 'failed') {
-      setMessage(`결제가 완료되지 않았습니다: ${params.get('message') || params.get('code') || '사용자 취소 또는 인증 실패'}`);
+      setMessage('결제가 완료되지 않았습니다. 결제창에서 다시 시도해 주세요.');
       return;
     }
     if (params.get('payment') !== 'success') return;
@@ -78,7 +85,7 @@ export function EvidenceUploadFlow({ caseId }: { caseId: string }) {
       if (!response.ok) throw new Error(data.error || 'toss_confirm_failed');
       setPaymentId(returnedPaymentId);
       setStage('paid');
-      setMessage('Toss 결제가 승인되었습니다. 이제 AI 초안 처리를 시작할 수 있습니다.');
+      setMessage('결제가 승인되었습니다. 이제 자료 정리를 시작할 수 있습니다.');
       window.history.replaceState(null, '', window.location.pathname);
     });
   }, [caseId]);
@@ -113,7 +120,7 @@ export function EvidenceUploadFlow({ caseId }: { caseId: string }) {
     });
     if (!response.ok) throw new Error((await response.json()).error || 'consent_failed');
     setStage('consented');
-    setMessage('동의가 기록되었습니다. IP와 사용자 에이전트는 해시로만 저장됩니다.');
+    setMessage('동의가 안전하게 저장되었습니다. 이제 결제를 진행할 수 있습니다.');
   }
 
   async function pay() {
@@ -133,9 +140,9 @@ export function EvidenceUploadFlow({ caseId }: { caseId: string }) {
     setPaymentId(payment.paymentId);
 
     if (payment.provider === 'toss') {
-      if (!payment.clientKey || !payment.orderId || !payment.successUrl || !payment.failUrl) throw new Error('toss_payment_config_missing');
+      if (!payment.clientKey || !payment.orderId || !payment.successUrl || !payment.failUrl) throw new Error('결제 준비가 완료되지 않았습니다. 잠시 후 다시 시도해 주세요.');
       await loadTossPayments();
-      if (!window.TossPayments) throw new Error('toss_sdk_unavailable');
+      if (!window.TossPayments) throw new Error('결제창을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.');
       await window.TossPayments(payment.clientKey).requestPayment('카드', {
         amount: payment.amountKrw,
         orderId: payment.orderId,
@@ -153,7 +160,7 @@ export function EvidenceUploadFlow({ caseId }: { caseId: string }) {
     });
     if (!complete.ok) throw new Error((await complete.json()).error || 'payment_failed');
     setStage('paid');
-    setMessage('9,900원 mock 결제가 완료되었습니다. 이제 AI 초안 처리를 시작할 수 있습니다.');
+    setMessage('결제가 완료되었습니다. 이제 자료 정리를 시작할 수 있습니다.');
   }
 
   async function process() {
@@ -162,7 +169,7 @@ export function EvidenceUploadFlow({ caseId }: { caseId: string }) {
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'process_failed');
     setStage('processed');
-    setMessage(`AI 초안 카드 ${data.cardCount}개가 생성되었습니다.${data.providerDegraded ? ' 일부 provider는 mock fallback입니다.' : ''}`);
+    setMessage(`자료 카드 ${data.cardCount}개가 준비되었습니다.${data.providerDegraded ? ' 일부 자료는 자동 정리가 완전하지 않아 확인이 필요합니다.' : ''}`);
     router.push(`/evidence/${caseId}/review`);
   }
 
@@ -170,7 +177,7 @@ export function EvidenceUploadFlow({ caseId }: { caseId: string }) {
     try {
       await action();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error));
+      setMessage(friendlyClientError(error));
     }
   }
 
@@ -186,11 +193,11 @@ export function EvidenceUploadFlow({ caseId }: { caseId: string }) {
       <button className="mt-4 rounded-xl bg-ink px-5 py-3 font-semibold text-white" onClick={() => run(upload)}>암호화 업로드 완료</button>
 
       <fieldset className="mt-8 space-y-3 rounded-2xl border border-stone-200 p-4">
-        <legend className="px-2 font-bold">AI 처리 전 명시 동의</legend>
+        <legend className="px-2 font-bold">자료 정리 전 명시 동의</legend>
         {[
           ['sensitive', '민감정보 처리에 동의합니다.'],
           ['original', '원본 자료 처리에 동의합니다.'],
-          ['ai', '외부 AI/OCR/STT provider 처리에 동의합니다.'],
+          ['ai', '자료 정리를 위한 외부 분석 서비스 처리에 동의합니다.'],
           ['overseas', '가능한 해외/제3자 처리에 동의합니다.'],
           ['payment', `${PRICE_KRW.toLocaleString('ko-KR')}원 결제에 동의합니다.`]
         ].map(([key, label]) => (
@@ -203,9 +210,9 @@ export function EvidenceUploadFlow({ caseId }: { caseId: string }) {
 
       <div className="mt-6 flex flex-wrap gap-3">
         <button className="rounded-xl bg-clay px-5 py-3 font-semibold text-white disabled:opacity-50" disabled={stage !== 'consented'} onClick={() => run(pay)}>9,900원 결제</button>
-        <button className="rounded-xl bg-emerald-700 px-5 py-3 font-semibold text-white disabled:opacity-50" disabled={stage !== 'paid'} onClick={() => run(process)}>OCR/STT/AI 초안 처리</button>
+        <button className="rounded-xl bg-emerald-700 px-5 py-3 font-semibold text-white disabled:opacity-50" disabled={stage !== 'paid'} onClick={() => run(process)}>자료 정리 시작</button>
       </div>
-      {paymentId && <p className="mt-2 text-xs text-stone-500">결제 ID: {paymentId}</p>}
+      {paymentId && <p className="mt-2 text-xs text-stone-500">결제 접수가 확인되었습니다.</p>}
       {message && <p className="mt-4 rounded-xl bg-calm p-3" role="status">{message}</p>}
     </section>
   );

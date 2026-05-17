@@ -2,7 +2,7 @@
 
 ## 구현 요약
 
-독립 세이프플랜 MVP를 Next.js App Router 기반 한국어 웹앱으로 구현했고, production 출시 차단 요소를 추가 하드닝했다. local/test는 mock provider와 local object store를 유지하지만, production은 Prisma PostgreSQL backend, GCS object storage, Toss 결제 승인, runtime readiness gate를 사용하도록 구성했다.
+독립 세이프플랜 MVP를 Next.js App Router 기반 한국어 웹앱으로 구현했고, production 출시 차단 요소를 추가 하드닝했다. local/test는 mock provider와 local object store를 유지하지만, production은 Prisma PostgreSQL backend, GCS object storage, Toss 결제 승인, runtime readiness gate를 사용하도록 구성했다. 또한 사용자 화면, 공유 화면, PDF에 남아 있던 내부 운영/개발 용어를 정리해 production 사용자 경험 문구로 교체했다.
 
 ## 구현된 기능
 
@@ -46,6 +46,11 @@
   - Korean UI copy
   - no legal advice/win prediction/lawyer-job matching/illegal collection guidance
   - required caution copy in UI/PDF/share flows
+- 사용자 경험 문구 정리
+  - 화면에 노출되던 `mock`, `provider`, `OCR/STT`, `noindex`, `token/hash`, `MVP`, `결제 ID` 등 내부 표현 제거
+  - 결제/동의/자료 정리/공유/삭제 상태 메시지를 자연스러운 한국어 서비스 문구로 교체
+  - PDF 원본 목록의 MIME/bytes 표기를 사람이 읽는 파일 유형/용량 표기로 교체
+  - API 오류 응답의 내부 오류 코드/환경 정보 노출을 사용자 안전 문구로 변환
 - Production runtime hardening
   - `SAFEPLAN_DB_BACKEND=prisma` normalized `safeplan_*` PostgreSQL persistence
   - `STORAGE_PROVIDER=gcs` private object adapter for originals/reports
@@ -77,6 +82,7 @@ docker build -t safeplan:production-hardening .
 - `pnpm test`: 통과 — 6 files, 11 tests
 - `pnpm build`: 통과 — Next.js 15.5.18 production build, 24 static pages generated
 - `pnpm e2e`: 통과 — Playwright Chromium happy path 1 passed, live-provider spec 1 skipped
+- `pnpm e2e:live`: 통과 — Playwright Chromium live provider full path 1 passed
 - `docker build -t safeplan:production-hardening .`: 통과 — Prisma generate + Next production build 포함
 
 추가 수행:
@@ -105,6 +111,7 @@ pnpm e2e:live
 - 실제 외부 호출 확인: `ocr:mistral=1`, `stt:groq=1`
 - 현재 `.env.local`의 `BASETEN_CLASSIFIER_URL`이 비어 있어 Baseten classifier live call은 blocked 상태이며 classification은 mock fallback으로 검증됐다.
 - Local live E2E는 외부 AI 비용 검증에 초점을 맞춰 `PAYMENT_PROVIDER=mock`으로 유지했다. Toss 결제 redirect/confirm 구현은 운영 credential 연결 후 별도 smoke가 필요하다.
+- 사용자 문구 정리 후에도 live E2E를 재실행해 변경된 동의/결제/자료 정리/공유/삭제 레이블로 전체 흐름이 깨지지 않음을 확인했다.
 
 ## Provider mode
 

@@ -6,12 +6,12 @@ export async function mockOcr(input: { originalName: string; mimeType: string; c
   const text = input.mimeType === 'text/plain' ? input.content.toString('utf8') : '';
   const markdown = text.trim()
     ? `# ${input.originalName}\n\n${text.trim()}`
-    : `# ${input.originalName}\n\n모의 OCR 결과입니다. 날짜: 2026-05-01. 상담 전 자료 정리를 위한 초안 텍스트입니다.`;
+    : `# ${input.originalName}\n\n날짜: 2026-05-01. 상담 전 자료 정리를 위한 초안 텍스트입니다.`;
   return { markdown, raw: { provider: 'mock', markdown, degraded: false } };
 }
 
 export async function mockStt(input: { originalName: string }): Promise<{ transcript: string; raw: unknown }> {
-  const transcript = `A: ${input.originalName}에서 추출한 모의 음성 전사 초안입니다.\nB: 실제 판단이 아니라 사용자가 확인해야 하는 자료 정리용 텍스트입니다.`;
+  const transcript = `A: ${input.originalName}에서 추출한 음성 전사 초안입니다.\nB: 실제 판단이 아니라 사용자가 확인해야 하는 자료 정리용 텍스트입니다.`;
   return { transcript, raw: { provider: 'mock', transcript, degraded: false } };
 }
 
@@ -34,13 +34,13 @@ export async function mockClassify(input: BasetenClassifierInput): Promise<Baset
   return {
     title: `${input.fileMetadata.originalName} 자료 초안`,
     summaryKo: normalized
-      ? `AI 초안: ${normalized.slice(0, 220)}${normalized.length > 220 ? '…' : ''}`
-      : 'AI 초안: 파일명과 메타데이터를 기준으로 생성한 검토 필요 자료입니다.',
+      ? `자동 정리 초안: ${normalized.slice(0, 220)}${normalized.length > 220 ? '…' : ''}`
+      : '자동 정리 초안: 파일명과 기본 정보를 기준으로 생성한 검토 필요 자료입니다.',
     materialType: input.materialType as MaterialType,
     dateCandidates: [{ date: '2026-05-01', source: 'inferred', confidence: 0.55 }],
     people: [{ label: '미상', rawMention: '자료 내 인물', confidence: 0.3 }],
     locations: [],
-    tags: [{ tag, confidence: 0.72, rationale: '모의 분류기는 키워드와 파일 내용을 기준으로 태그 초안을 선택합니다.' }],
+    tags: [{ tag, confidence: 0.72, rationale: '키워드와 파일 내용을 기준으로 태그 초안을 선택했습니다.' }],
     confidenceLevel,
     includeInReportDefault: confidenceLevel >= 5,
     needsUserReview: true,

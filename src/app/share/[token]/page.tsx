@@ -15,7 +15,7 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
     return (
       <section className="rounded-3xl bg-white p-6 shadow-sm">
         <h1 className="text-3xl font-bold">만료되었거나 폐기된 링크입니다</h1>
-        <p className="mt-3">리포트 내용은 노출되지 않습니다. 필요한 경우 소유자가 새 URL을 생성해야 합니다.</p>
+        <p className="mt-3">리포트 내용은 노출되지 않습니다. 필요한 경우 소유자가 새 링크를 생성해야 합니다.</p>
       </section>
     );
   }
@@ -25,7 +25,7 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
   return (
     <article className="space-y-6 rounded-3xl bg-white p-6 shadow-sm" data-testid="share-report">
       <div>
-        <p className="text-sm font-semibold text-clay">noindex · 14일 만료 보안 URL</p>
+        <p className="text-sm font-semibold text-clay">14일 만료 보안 링크</p>
         <h1 className="mt-2 text-3xl font-bold">독립 세이프플랜 자료 타임라인</h1>
         <p className="mt-3 whitespace-pre-line text-sm leading-6 text-stone-700">{LEGAL_CAUTION_COPY}</p>
       </div>
@@ -38,7 +38,7 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
         {cards.map((card) => (
           <div key={card.id} className="rounded-2xl border border-stone-200 p-4">
             <h3 className="font-bold">{card.title}</h3>
-            <p className="mt-2 text-sm">{card.dateCandidate || '날짜 미상'} · confidence {card.confidenceLevel}</p>
+            <p className="mt-2 text-sm">{card.dateCandidate || '날짜 미상'} · 추출 신뢰도 {card.confidenceLevel}단계</p>
             <p className="mt-2 leading-7">{card.summaryKo}</p>
           </div>
         ))}
