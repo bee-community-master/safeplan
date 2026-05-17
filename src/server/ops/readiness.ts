@@ -72,6 +72,12 @@ export function productionReadiness(): ReadinessReport {
     severity: 'blocker',
     detail: 'Production payment must use Toss credentials; mock payment is local/test only.'
   });
+  add(checks, {
+    name: 'public_support_channel',
+    ok: !production || present('NEXT_PUBLIC_SUPPORT_EMAIL'),
+    severity: 'blocker',
+    detail: 'Production must expose a public support email for refunds, deletion, and incident follow-up.'
+  });
 
   return {
     appEnv,

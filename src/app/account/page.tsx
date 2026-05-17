@@ -1,5 +1,10 @@
 import { SafetyNotice } from '@/components/SafetyNotice';
 
+export const metadata = {
+  robots: { index: false, follow: false },
+  title: '보관·삭제 안내 | 독립 세이프플랜'
+};
+
 export default function AccountPage() {
   return (
     <div className="space-y-6">

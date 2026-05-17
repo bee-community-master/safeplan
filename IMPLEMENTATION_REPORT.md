@@ -35,6 +35,7 @@
   - Korean PDF smoke generation with Noto Sans KR font embedding
   - confirmed+included cards only
   - secure `/share/:token` URL, token hash storage, 14-day TTL, revoke, access audit
+  - optional share-link password gate in user flow and protected share page
   - noindex metadata and robots disallow
   - PDF download route
 - Deletion
@@ -51,6 +52,11 @@
   - 결제/동의/자료 정리/공유/삭제 상태 메시지를 자연스러운 한국어 서비스 문구로 교체
   - PDF 원본 목록의 MIME/bytes 표기를 사람이 읽는 파일 유형/용량 표기로 교체
   - API 오류 응답의 내부 오류 코드/환경 정보 노출을 사용자 안전 문구로 변환
+- Production 사용자 표면 보강
+  - 가격/환불 안내, 도움말/고객지원, 서비스 상태 페이지 추가
+  - 전역 네비게이션/푸터에 법적 고지, 개인정보, 환불, 상태 링크 추가
+  - 공개 페이지는 검색 허용, 민감한 evidence/share/account/API 경로는 robots/noindex로 보호
+  - 삭제 전 확인 체크박스 추가로 실수 삭제 방지
 - Production runtime hardening
   - `SAFEPLAN_DB_BACKEND=prisma` normalized `safeplan_*` PostgreSQL persistence
   - `STORAGE_PROVIDER=gcs` private object adapter for originals/reports
@@ -74,16 +80,18 @@
 ```bash
 pnpm lint && pnpm test && pnpm build && pnpm e2e && pnpm e2e:live
 docker build -t safeplan:production-hardening .
+docker build -t safeplan:production-ux .
 ```
 
 결과:
 
 - `pnpm lint`: 통과 (`next lint` no errors + `tsc --noEmit` 통과)
 - `pnpm test`: 통과 — 6 files, 11 tests
-- `pnpm build`: 통과 — Next.js 15.5.18 production build, 24 static pages generated
+- `pnpm build`: 통과 — Next.js 15.5.18 production build, 29 static pages generated
 - `pnpm e2e`: 통과 — Playwright Chromium happy path 1 passed, live-provider spec 1 skipped
 - `pnpm e2e:live`: 통과 — Playwright Chromium live provider full path 1 passed
 - `docker build -t safeplan:production-hardening .`: 통과 — Prisma generate + Next production build 포함
+- `docker build -t safeplan:production-ux .`: 통과 — production UX 보강 후 Next production build 29 static pages 포함
 
 추가 수행:
 
@@ -112,6 +120,7 @@ pnpm e2e:live
 - 현재 `.env.local`의 `BASETEN_CLASSIFIER_URL`이 비어 있어 Baseten classifier live call은 blocked 상태이며 classification은 mock fallback으로 검증됐다.
 - Local live E2E는 외부 AI 비용 검증에 초점을 맞춰 `PAYMENT_PROVIDER=mock`으로 유지했다. Toss 결제 redirect/confirm 구현은 운영 credential 연결 후 별도 smoke가 필요하다.
 - 사용자 문구 정리 후에도 live E2E를 재실행해 변경된 동의/결제/자료 정리/공유/삭제 레이블로 전체 흐름이 깨지지 않음을 확인했다.
+- Production 사용자 표면 보강 후 Playwright happy path에서 비밀번호 보호 공유 링크 열기와 삭제 전 확인 UX를 함께 검증했다.
 
 ## Provider mode
 
@@ -154,6 +163,7 @@ pnpm e2e:live
 - `DATABASE_URL`
 - `SESSION_SECRET`
 - `NEXT_PUBLIC_APP_URL`
+- `NEXT_PUBLIC_SUPPORT_EMAIL`
 - `APP_URL`
 - `STORAGE_PROVIDER`
 - `SAFEPLAN_DB_BACKEND`
@@ -193,7 +203,7 @@ pnpm e2e:live
 
 ## 완료 기준 감사
 
-- mock mode end-to-end: Playwright happy path 통과
+- mock mode end-to-end: Playwright happy path 통과, 비밀번호 보호 공유 링크와 삭제 전 확인 포함
 - real provider adapters: 파일 존재 및 parser/mock tests 통과
 - lint: 통과
 - unit/integration tests: 통과

@@ -75,6 +75,7 @@ projects/$GCP_PROJECT_ID/locations/asia-northeast3/keyRings/safeplan/cryptoKeys/
 ```bash
 for name in \
   safeplan-database-url safeplan-session-secret safeplan-next-public-app-url \
+  safeplan-next-public-support-email \
   safeplan-mistral-api-key safeplan-groq-api-key safeplan-baseten-api-key safeplan-baseten-classifier-url \
   safeplan-toss-client-key safeplan-toss-secret-key safeplan-toss-webhook-secret safeplan-kms-key-name \
   safeplan-envelope-master-key; do
@@ -88,7 +89,7 @@ Envelope master key 예시 생성:
 openssl rand -base64 32 | gcloud secrets create safeplan-envelope-master-key --data-file=- || true
 ```
 
-필수 환경변수는 `.env.example`을 기준으로 합니다. production은 `APP_ENV=production`, `SAFEPLAN_DB_BACKEND=prisma`, `STORAGE_PROVIDER=gcs`로 실행합니다. 실제 provider 운영에는 `MISTRAL_API_KEY`, `GROQ_API_KEY`, `BASETEN_API_KEY`, `BASETEN_CLASSIFIER_URL`, Toss 키, `DATABASE_URL`, `SESSION_SECRET`, GCS/KMS 값, `ENVELOPE_MASTER_KEY_BASE64`가 필요합니다.
+필수 환경변수는 `.env.example`을 기준으로 합니다. production은 `APP_ENV=production`, `SAFEPLAN_DB_BACKEND=prisma`, `STORAGE_PROVIDER=gcs`로 실행합니다. 실제 provider 운영에는 `MISTRAL_API_KEY`, `GROQ_API_KEY`, `BASETEN_API_KEY`, `BASETEN_CLASSIFIER_URL`, Toss 키, `DATABASE_URL`, `SESSION_SECRET`, `NEXT_PUBLIC_SUPPORT_EMAIL`, GCS/KMS 값, `ENVELOPE_MASTER_KEY_BASE64`가 필요합니다.
 
 ## 7. 서비스 계정과 IAM
 

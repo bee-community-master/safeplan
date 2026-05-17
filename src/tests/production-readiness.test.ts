@@ -20,7 +20,7 @@ describe('production readiness gates', () => {
 
     expect(report.ready).toBe(false);
     expect(report.checks.filter((check) => !check.ok).map((check) => check.name)).toEqual(
-      expect.arrayContaining(['app_url_https', 'session_secret_strength', 'database_backend', 'object_storage', 'kms_configuration', 'ai_provider_mode', 'payment_provider'])
+      expect.arrayContaining(['app_url_https', 'session_secret_strength', 'database_backend', 'object_storage', 'kms_configuration', 'ai_provider_mode', 'payment_provider', 'public_support_channel'])
     );
   });
 
@@ -45,6 +45,7 @@ describe('production readiness gates', () => {
     vi.stubEnv('TOSS_CLIENT_KEY', 'client');
     vi.stubEnv('TOSS_SECRET_KEY', 'secret');
     vi.stubEnv('TOSS_WEBHOOK_SECRET', 'webhook');
+    vi.stubEnv('NEXT_PUBLIC_SUPPORT_EMAIL', 'support@safeplan.example.com');
 
     expect(productionReadiness().ready).toBe(true);
   });

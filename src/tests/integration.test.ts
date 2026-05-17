@@ -49,6 +49,10 @@ describe('local happy path services', () => {
     const share = await createShareLink(report.id);
     const resolved = await resolveShareToken(share.token);
     expect(resolved.status).toBe('ok');
+    const protectedShare = await createShareLink(report.id, 'safe-pass-123');
+    expect((await resolveShareToken(protectedShare.token)).status).toBe('password_required');
+    expect((await resolveShareToken(protectedShare.token, 'wrong-pass')).status).toBe('password_invalid');
+    expect((await resolveShareToken(protectedShare.token, 'safe-pass-123')).status).toBe('ok');
     await revokeShareLink(share.share.id);
     expect((await resolveShareToken(share.token)).status).toBe('not_found');
     const deleted = await deleteCaseDeep(caseRecord.id);

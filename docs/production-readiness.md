@@ -12,7 +12,7 @@
 | Object storage | 원본/PDF가 컨테이너 로컬 파일 중심 | `STORAGE_PROVIDER=gcs`와 `@google-cloud/storage` adapter 추가, 원본/PDF 모두 private object로 write/read/delete |
 | App envelope key | `KMS_KEY_NAME` 문자열을 master material처럼 쓰는 위험 | `ENVELOPE_MASTER_KEY_BASE64` 32-byte secret 필수화, production 누락 시 암호화 실패 및 readiness blocker |
 | Payment | local/test mock 버튼 중심, Toss는 skeleton | Toss checkout SDK request + server-side `/v1/payments/confirm` 승인 API + webhook retrieve-verify handler 추가 |
-| Runtime readiness | 설정 누락 상태에서도 배포 가능 | `/api/health/live`, `/api/health/ready` 추가, `APP_ENV=production`에서 DB/GCS/KMS/AI/Toss/HTTPS 필수값 검사 |
+| Runtime readiness | 설정 누락 상태에서도 배포 가능 | `/api/health/live`, `/api/health/ready` 추가, `APP_ENV=production`에서 DB/GCS/KMS/AI/Toss/HTTPS/고객지원 필수값 검사 |
 | Web hardening | 보안 헤더/origin/rate limit 미흡 | middleware로 CSP, frame deny, no-sniff, no-referrer, permission policy, same-origin mutating API guard, per-instance rate limit 추가 |
 | Session integrity | anonymous session cookie가 서명되지 않음 | HMAC signed session cookie 도입, production에서는 unsigned legacy cookie 거부 |
 
@@ -27,6 +27,7 @@
 - `KMS_KEY_NAME` + `ENVELOPE_MASTER_KEY_BASE64` 32-byte base64 secret
 - `AI_PROVIDER_MODE=real` + Mistral/Groq/Baseten key/url
 - `PAYMENT_PROVIDER=toss` + Toss client/secret/webhook secret
+- `NEXT_PUBLIC_SUPPORT_EMAIL`: 환불/삭제/장애 문의를 받을 공개 고객지원 이메일
 
 ## 아직 출시 전 실제 환경에서 확인해야 할 항목
 
@@ -36,8 +37,9 @@
 4. Toss live 또는 test-live 결제 승인 redirect와 confirm API smoke
 5. Baseten classifier URL 연결 후 `classification:baseten` live E2E 재검증
 6. 실제 도메인 HTTPS/쿠키 secure/same-origin 동작 확인
-7. 개인정보/전자상거래/법률 문구 최종 검토
-8. Monitoring/Error Reporting/예산 알림 설정
+7. 실제 고객지원 이메일 수신/응답 프로세스 확인
+8. 개인정보/전자상거래/법률 문구 최종 검토
+9. Monitoring/Error Reporting/예산 알림 설정
 
 ## 의도적으로 아직 하지 않은 것
 

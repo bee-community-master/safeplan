@@ -25,7 +25,7 @@ test('safeplan local mock happy path', async ({ page, context }) => {
   await page.getByRole('button', { name: '9,900원 결제' }).click();
   await expect(page.getByRole('status')).toContainText('결제가 완료');
   await page.getByRole('button', { name: '자료 정리 시작' }).click();
-  await expect(page.getByText('자료 카드 검토')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '자료 카드 검토' })).toBeVisible();
 
   const cards = page.getByTestId('evidence-card');
   await expect(cards.first()).toBeVisible();
@@ -40,6 +40,7 @@ test('safeplan local mock happy path', async ({ page, context }) => {
   await page.getByRole('button', { name: '리포트 생성으로 이동' }).click();
   await page.getByRole('button', { name: '리포트 생성' }).click();
   await expect(page.getByRole('status')).toContainText('리포트가 생성');
+  await page.getByLabel('공유 링크 비밀번호').fill('safe-pass-123');
   await page.getByRole('button', { name: '보안 링크 생성' }).click();
   await expect(page.getByRole('status')).toContainText('보안 링크');
   const shareUrl = await page.getByRole('link', { name: /\/share\// }).textContent();
@@ -47,9 +48,13 @@ test('safeplan local mock happy path', async ({ page, context }) => {
 
   const sharePage = await context.newPage();
   await sharePage.goto(shareUrl!);
+  await expect(sharePage.getByText('비밀번호 확인')).toBeVisible();
+  await sharePage.getByLabel('공유 링크 비밀번호').fill('safe-pass-123');
+  await sharePage.getByRole('button', { name: '리포트 열기' }).click();
   await expect(sharePage.getByTestId('share-report')).toContainText('자료 타임라인');
   await sharePage.close();
 
+  await page.getByLabel(/삭제하거나 더 이상 열 수 없게 처리/).check();
   await page.getByRole('button', { name: '자료 전체 삭제' }).click();
   await expect(page.getByRole('status')).toContainText('삭제');
 });

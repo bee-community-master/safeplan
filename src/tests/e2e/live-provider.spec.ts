@@ -44,7 +44,7 @@ function makeSilentWavBuffer(seconds = 1): Buffer {
 test('paid live provider e2e hits Mistral OCR and Groq STT without falling back for extraction', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: '안전합니다' }).click();
-  await page.getByRole('link', { name: '자료 정리' }).click();
+  await page.getByRole('link', { name: '자료 정리', exact: true }).click();
   await page.getByRole('button', { name: '안전 확인 후 업로드 시작' }).click();
   await expect(page.getByText('자료 업로드 · 동의 · 결제')).toBeVisible();
 
@@ -69,7 +69,7 @@ test('paid live provider e2e hits Mistral OCR and Groq STT without falling back 
   await page.getByRole('button', { name: '9,900원 결제' }).click();
   await expect(page.getByRole('status')).toContainText('결제가 완료');
   await page.getByRole('button', { name: '자료 정리 시작' }).click();
-  await expect(page.getByText('자료 카드 검토')).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByRole('heading', { name: '자료 카드 검토' })).toBeVisible({ timeout: 60_000 });
   const cards = page.getByTestId('evidence-card');
   await expect(cards.first()).toBeVisible();
   const cardCount = await cards.count();
@@ -110,6 +110,7 @@ test('paid live provider e2e hits Mistral OCR and Groq STT without falling back 
   }
 
   await page.goto(reportPageUrl);
+  await page.getByLabel(/삭제하거나 더 이상 열 수 없게 처리/).check();
   await page.getByRole('button', { name: '자료 전체 삭제' }).click();
   await expect(page.getByRole('status')).toContainText('삭제');
 });

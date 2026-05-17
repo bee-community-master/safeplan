@@ -14,6 +14,7 @@ export default function LandingPage() {
         <div className="mt-6 flex flex-wrap gap-3">
           <a className="rounded-xl bg-ink px-5 py-3 font-semibold text-white" href="/safety">안전 확인 시작</a>
           <a className="rounded-xl border border-stone-300 px-5 py-3 font-semibold" href="/simulator">무료 시뮬레이터</a>
+          <a className="rounded-xl border border-stone-300 px-5 py-3 font-semibold" href="/pricing">가격 확인</a>
         </div>
       </section>
       <SafetyNotice />
@@ -21,6 +22,18 @@ export default function LandingPage() {
         {['0.5개월 단위 보수적 계산', '자료 단위 자동 정리 초안', '14일 만료 보안 링크'].map((item) => (
           <div key={item} className="rounded-2xl bg-white p-5 shadow-sm"><h2 className="font-bold">{item}</h2><p className="mt-2 text-sm leading-6 text-stone-600">안전·프라이버시·사용자 확인을 기본값으로 둡니다.</p></div>
         ))}
+      </section>
+      <section className="rounded-3xl bg-white p-6 shadow-sm">
+        <h2 className="text-2xl font-bold">어떻게 진행되나요?</h2>
+        <ol className="mt-4 grid gap-3 md:grid-cols-4">
+          {['안전 확인', '생활 가능 기간 계산', '자료 업로드와 동의', '사용자 확인 후 리포트 생성'].map((step, index) => (
+            <li key={step} className="rounded-2xl bg-calm p-4">
+              <span className="text-sm font-bold text-clay">STEP {index + 1}</span>
+              <p className="mt-2 font-semibold">{step}</p>
+            </li>
+          ))}
+        </ol>
+        <p className="mt-4 text-sm leading-6 text-stone-700">자료 정리는 “상담자료 준비”를 돕기 위한 초안 생성 흐름이며, 사용자가 확인하지 않은 내용은 리포트에 포함하지 않습니다.</p>
       </section>
     </div>
   );

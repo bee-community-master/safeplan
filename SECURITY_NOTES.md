@@ -16,6 +16,7 @@
 
 - `deleteCaseDeep(caseId)`는 케이스 soft delete, 원본 암호화 객체(GCS/local) 삭제, OCR/STT/AI 결과 비식별 삭제, 카드 삭제 마킹, PDF 객체 삭제, 공유 URL 폐기를 수행한다.
 - 비민감 audit event는 타입, 카운트, 시간 등만 보관한다.
+- 사용자 화면에서는 삭제 전 확인 체크박스를 요구해 실수로 원본과 리포트를 삭제하는 일을 줄인다.
 
 ## 로깅 정책
 
@@ -38,6 +39,8 @@
 - HMAC signed anonymous session cookie를 사용하며 production에서는 unsigned legacy cookie를 거부한다.
 - middleware가 CSP, frame deny, no-sniff, no-referrer, permission policy, same-origin mutating API guard, per-instance rate limit을 적용한다.
 - `/api/health/ready`는 production 필수 설정 누락 시 503을 반환한다.
+- 공개 검색은 landing/pricing/help/legal/status 같은 일반 안내 페이지로 제한하고, `/api/`, `/evidence/`, `/share/`, `/account`는 robots/noindex 정책으로 보호한다.
+- 공유 링크는 기본 14일 만료이며 선택적으로 비밀번호를 설정할 수 있다. 비밀번호가 설정된 링크는 별도 확인 후에만 리포트 내용을 렌더링한다.
 
 ## 남은 검토 항목
 

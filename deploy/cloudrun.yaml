@@ -55,6 +55,11 @@ spec:
                 secretKeyRef:
                   name: safeplan-next-public-app-url
                   key: latest
+            - name: NEXT_PUBLIC_SUPPORT_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: safeplan-next-public-support-email
+                  key: latest
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
