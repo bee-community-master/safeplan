@@ -1,0 +1,30 @@
+# dependencies
+node_modules
+.pnp*
+
+# next
+.next
+out
+
+# env/secrets
+.env
+.env.*
+!.env.example
+
+# local data
+.safeplan-data
+uploads
+coverage
+playwright-report
+test-results
+
+# OS/editor
+.DS_Store
+*.log
+
+.serena
+
+.omx
+
+# TypeScript
+tsconfig.tsbuildinfo

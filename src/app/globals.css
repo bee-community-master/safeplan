@@ -1,0 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: light; }
+body { margin: 0; background: #f6f3ee; color: #172026; }
+a { color: inherit; }
+button, input, textarea, select { font: inherit; }
+.focus-ring:focus { outline: 3px solid #4f7b68; outline-offset: 2px; }

@@ -1,0 +1,116 @@
+import 'server-only';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { LIMITS } from '@/lib/constants';
+import { shouldIncludeByConfidence } from '@/lib/evidence';
+import type { ReportRecord, ShareLinkRecord } from '@/server/db/types';
+import { dataDir, readDb, updateDb } from '@/server/db/local-store';
+import { hashSecret, id, randomToken, sha256Hex, verifySecret } from '@/server/security/crypto';
+import { generateReportPdf } from './pdf';
+
+function reportsDir(): string {
+  return path.join(dataDir(), 'reports');
+}
+
+export function reportObjectPath(objectName: string): string {
+  return path.join(reportsDir(), objectName.replaceAll('/', '__'));
+}
+
+export async function generateReport(caseId: string): Promise<ReportRecord> {
+  const db = await readDb();
+  const caseRecord = db.cases.find((item) => item.id === caseId && item.deletedAt === null);
+  if (!caseRecord) throw new Error('case_not_found');
+  const cards = db.evidenceCards.filter(
+    (card) => card.caseId === caseId && card.deletedAt === null && (card.includeInReport || shouldIncludeByConfidence(card.confidenceLevel, card.userConfirmed, card.includeInReport)) && card.userConfirmed
+  );
+  if (cards.length === 0) throw new Error('no_confirmed_cards');
+  const files = db.evidenceFiles.filter((file) => file.caseId === caseId && file.deletedAt === null);
+  await mkdir(reportsDir(), { recursive: true });
+  const pdf = await generateReportPdf({ caseRecord, cards, files });
+  const now = new Date().toISOString();
+  const objectName = `${caseId}/${Date.now()}-safeplan-report.pdf`;
+  await writeFile(reportObjectPath(objectName), pdf);
+  return updateDb((mutableDb) => {
+    const record: ReportRecord = {
+      id: id('report'),
+      caseId,
+      version: mutableDb.reports.filter((item) => item.caseId === caseId).length + 1,
+      pdfBucket: process.env.GCS_BUCKET_REPORTS || 'local-reports',
+      pdfObject: objectName,
+      generatedAt: now,
+      deletedAt: null
+    };
+    mutableDb.reports.push(record);
+    const mutableCase = mutableDb.cases.find((item) => item.id === caseId);
+    if (mutableCase) {
+      mutableCase.status = 'reported';
+      mutableCase.updatedAt = now;
+    }
+    mutableDb.auditEvents.push({ id: id('audit'), userId: caseRecord.userId, caseId, type: 'report.generated', metadataJson: { cardCount: cards.length }, createdAt: now });
+    return record;
+  });
+}
+
+export async function readReportPdf(reportId: string): Promise<{ report: ReportRecord; pdf: Buffer }> {
+  const db = await readDb();
+  const report = db.reports.find((item) => item.id === reportId && item.deletedAt === null);
+  if (!report) throw new Error('report_not_found');
+  return { report, pdf: await readFile(reportObjectPath(report.pdfObject)) };
+}
+
+export async function deleteReportObject(report: ReportRecord): Promise<void> {
+  await rm(reportObjectPath(report.pdfObject), { force: true });
+}
+
+export async function createShareLink(reportId: string, password?: string | null): Promise<{ share: ShareLinkRecord; token: string }> {
+  const token = randomToken(32);
+  const tokenHash = sha256Hex(token);
+  const now = new Date();
+  const expiresAt = new Date(now);
+  expiresAt.setDate(expiresAt.getDate() + LIMITS.shareUrlTtlDays);
+  const share = await updateDb((db) => {
+    const report = db.reports.find((item) => item.id === reportId && item.deletedAt === null);
+    if (!report) throw new Error('report_not_found');
+    const caseRecord = db.cases.find((item) => item.id === report.caseId);
+    const record: ShareLinkRecord = {
+      id: id('share'),
+      reportId,
+      tokenHash,
+      passwordHash: password ? hashSecret(password) : null,
+      expiresAt: expiresAt.toISOString(),
+      revokedAt: null,
+      accessCount: 0
+    };
+    db.shareLinks.push(record);
+    db.auditEvents.push({ id: id('audit'), userId: caseRecord?.userId ?? null, caseId: report.caseId, type: 'share.created', metadataJson: { expiresAt: record.expiresAt, passwordProtected: Boolean(password) }, createdAt: now.toISOString() });
+    return record;
+  });
+  return { share, token };
+}
+
+export async function revokeShareLink(shareId: string): Promise<ShareLinkRecord> {
+  return updateDb((db) => {
+    const share = db.shareLinks.find((item) => item.id === shareId);
+    if (!share) throw new Error('share_not_found');
+    share.revokedAt = new Date().toISOString();
+    const report = db.reports.find((item) => item.id === share.reportId);
+    db.auditEvents.push({ id: id('audit'), userId: null, caseId: report?.caseId ?? null, type: 'share.revoked', metadataJson: { shareId }, createdAt: share.revokedAt });
+    return share;
+  });
+}
+
+export async function resolveShareToken(token: string, password?: string | null): Promise<{ status: 'ok'; report: ReportRecord; share: ShareLinkRecord } | { status: 'not_found' | 'expired' | 'password_required' | 'password_invalid' }> {
+  const tokenHash = sha256Hex(token);
+  return updateDb((db) => {
+    const share = db.shareLinks.find((item) => item.tokenHash === tokenHash);
+    if (!share || share.revokedAt) return { status: 'not_found' } as const;
+    if (new Date(share.expiresAt).getTime() < Date.now()) return { status: 'expired' } as const;
+    if (share.passwordHash && !password) return { status: 'password_required' } as const;
+    if (share.passwordHash && !verifySecret(password || '', share.passwordHash)) return { status: 'password_invalid' } as const;
+    const report = db.reports.find((item) => item.id === share.reportId && item.deletedAt === null);
+    if (!report) return { status: 'not_found' } as const;
+    share.accessCount += 1;
+    db.auditEvents.push({ id: id('audit'), userId: null, caseId: report.caseId, type: 'share.accessed', metadataJson: { shareId: share.id, accessCount: share.accessCount }, createdAt: new Date().toISOString() });
+    return { status: 'ok', report, share } as const;
+  });
+}
