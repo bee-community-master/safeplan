@@ -20,7 +20,7 @@ export default function PricingPage() {
       <section className="grid gap-4 md:grid-cols-3">
         {[
           ['포함 범위', `최대 ${LIMITS.maxFilesPerCase}개, 총 ${LIMITS.maxTotalUploadMb}MB까지 업로드할 수 있습니다.`],
-          ['리포트 생성', '사용자가 확인하고 포함한 자료 카드만 리포트와 PDF 다운로드에 들어갑니다.'],
+          ['리포트 포함 범위', '사용자가 확인하고 포함한 자료 카드만 리포트와 PDF 다운로드에 들어갑니다.'],
           ['보안 공유', `${LIMITS.shareUrlTtlDays}일 뒤 만료되는 링크를 만들 수 있고, 비밀번호를 선택할 수 있습니다.`]
         ].map(([title, body]) => (
           <article key={title} className="surface-card">

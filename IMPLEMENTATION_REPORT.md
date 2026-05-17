@@ -70,6 +70,11 @@
   - `/api/health/live`, `/api/health/ready` production readiness gate
   - Prisma migration under `prisma/migrations/`
   - `docs/production-readiness.md`
+- 한/영 전환 지원
+  - 한국어 기본값 유지, 발표 시연용 English 토글 추가
+  - 전역 네비게이션에서 언어를 전환하고 선택값을 브라우저에 저장
+  - 주요 정적 페이지와 핵심 flow 문구, 안전/법적 고지, 업로드·결제·리포트 상태 문구를 영어로 전환
+  - `html lang`과 문서 제목도 현재 언어에 맞게 갱신
 - Deployment artifacts
   - `Dockerfile`
   - `.dockerignore`
@@ -92,9 +97,9 @@ docker build -t safeplan:production-design .
 결과:
 
 - `pnpm lint`: 통과 (`next lint` no errors + `tsc --noEmit` 통과)
-- `pnpm test`: 통과 — 8 files, 21 tests
+- `pnpm test`: 통과 — 12 files, 31 tests
 - `pnpm build`: 통과 — Next.js 15.5.18 production build, 29 static pages generated
-- `pnpm e2e`: 통과 — Playwright Chromium happy path 1 passed, live-provider spec 1 skipped
+- `pnpm e2e`: 통과 — Playwright Chromium happy path 1 passed, language toggle 1 passed, live-provider spec 1 skipped
 - `pnpm e2e:live`: 통과 — Playwright Chromium live provider full path 1 passed
 - `docker build -t safeplan:production-hardening .`: 통과 — Prisma generate + Next production build 포함
 - `docker build -t safeplan:production-ux .`: 통과 — production UX 보강 후 Next production build 29 static pages 포함
@@ -230,6 +235,25 @@ pnpm e2e:live
 - `pnpm test`: 통과 — 8 files, 19 tests
 - `pnpm build`: 통과 — 29 static pages
 - `pnpm e2e`: 통과 — happy path 1 passed, live-provider skipped
+- `pnpm e2e:live`: 통과 — live provider path 1 passed
+
+
+## 2026-05-17 bilingual demo mode update
+
+발표 시연을 위해 한국어 기본 UX를 유지하면서 사이트 전역 한/영 전환 기능을 추가했다.
+
+- 전역 헤더에 `한국어 / English` 언어 토글을 추가했다.
+- 한국어는 검수용 기본 언어로 유지하고, 영어 선택값은 `localStorage`에만 저장한다.
+- `LanguageProvider`가 라우트 전환과 동적 상태 메시지를 감지해 주요 UI 문구, 접근성 label, placeholder, 문서 제목, `html lang`을 현재 언어에 맞게 갱신한다.
+- 영어 모드에서도 112/1366, 법률 자문 아님, AI 초안, 불법 자료 수집 미안내 등 안전/법적 guardrail 문구를 유지한다.
+- 별도 locale URL/SEO는 구현하지 않았다. 현재 범위는 발표·검수용 UI 언어 전환이며, 공개 SEO 다국어 운영이 필요하면 `/ko`, `/en` 라우팅과 서버 렌더 locale dictionary를 후속으로 분리해야 한다.
+
+추가 검증:
+
+- `pnpm lint`: 통과
+- `pnpm test`: 통과 — 12 files, 31 tests
+- `rm -rf .next && pnpm build`: 통과 — 29 static pages
+- `pnpm e2e`: 통과 — happy path 1 passed, language toggle 1 passed, live-provider skipped
 - `pnpm e2e:live`: 통과 — live provider path 1 passed
 
 ## Provider mode
