@@ -40,7 +40,6 @@ export async function GET(_: Request, { params }: { params: Promise<{ caseId: st
         })),
         aiDraftMetadata: {
           draft: Boolean((card.aiDraftJson as { draft?: unknown } | null)?.draft),
-          provider: typeof (card.aiDraftJson as { provider?: unknown } | null)?.provider === 'string' ? String((card.aiDraftJson as { provider?: unknown }).provider) : undefined,
           providerDegraded: Boolean((card.aiDraftJson as { providerDegraded?: unknown } | null)?.providerDegraded)
         },
         userMemo: card.userMemo,

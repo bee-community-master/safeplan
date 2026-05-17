@@ -14,6 +14,16 @@ export interface UploadInputFile {
   userMemo?: string | null;
 }
 
+export interface EvidenceFileUploadSummary {
+  id: string;
+  originalName: string;
+  mimeType: string;
+  sizeBytes: number;
+  materialType: EvidenceFileRecord['materialType'];
+  processingStatus: EvidenceFileRecord['processingStatus'];
+  uploadedAt: string;
+}
+
 interface PreparedUploadFile extends UploadInputFile {
   plain: Buffer;
   actualSizeBytes: number;
@@ -70,14 +80,15 @@ export async function storeEvidenceFiles(caseId: string, files: UploadInputFile[
 
   for (const file of preparedFiles) {
     const encrypted = encryptBuffer(file.plain);
+    const recordId = id('file');
     const record: EvidenceFileRecord = {
-      id: id('file'),
+      id: recordId,
       caseId,
       originalName: file.name,
       mimeType: file.mimeType,
       sizeBytes: file.actualSizeBytes,
       gcsBucket: process.env.GCS_BUCKET_ORIGINALS || 'local-originals',
-      gcsObject: `${caseId}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9가-힣._-]/g, '_')}.enc`,
+      gcsObject: `${caseId}/${recordId}-${file.name.replace(/[^a-zA-Z0-9가-힣._-]/g, '_')}.enc`,
       encryptedDek: encrypted.encryptedDek,
       checksumSha256: encrypted.checksumSha256,
       materialType: inferMaterialType(file.mimeType, file.name),
@@ -113,6 +124,18 @@ export async function storeEvidenceFiles(caseId: string, files: UploadInputFile[
     throw error;
   }
   return records;
+}
+
+export function toEvidenceFileUploadSummary(file: EvidenceFileRecord): EvidenceFileUploadSummary {
+  return {
+    id: file.id,
+    originalName: file.originalName,
+    mimeType: file.mimeType,
+    sizeBytes: file.sizeBytes,
+    materialType: file.materialType,
+    processingStatus: file.processingStatus,
+    uploadedAt: file.uploadedAt
+  };
 }
 
 export async function readEvidencePlain(file: EvidenceFileRecord): Promise<Buffer> {

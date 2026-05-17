@@ -16,10 +16,15 @@ const aiTagSchema = z.enum(AI_TAGS);
 const materialTypeSchema = z.enum(MATERIAL_TYPES);
 const PROHIBITED_AI_CLAIM_PATTERNS = [
   /법적으로\s*유효한\s*증거/,
-  /승소\s*가능성/,
-  /이혼해야\s*합니다/,
+  /승소|패소|이길\s*가능성/,
+  /이혼(을)?\s*(권|추천|해야)/,
+  /진단(됩니다|입니다|할\s*수|으로)/,
+  /진짜\s*증거|진정성|위조(?:가)?\s*아님/,
   /법원에서\s*인정/,
-  /증거능력이\s*있/
+  /법원\s*제출\s*가능/,
+  /증거\s*능력|증거능력이\s*있/,
+  /법적\s*효력(이)?\s*(있|인정|확실)/,
+  /몰래\s*설치|무단\s*접근|위치\s*추적|위치추적|해킹|스파이웨어/
 ] as const;
 
 function containsProhibitedAiClaim(value: string): boolean {

@@ -15,6 +15,7 @@
 ## 삭제 동작
 
 - `deleteCaseDeep(caseId)`는 케이스 soft delete, 원본 암호화 객체(GCS/local) 삭제, OCR/STT/AI 결과 비식별 삭제, 카드 삭제 마킹, PDF 객체 삭제, 공유 URL 폐기를 수행한다.
+- 삭제 후 DB에는 원본 파일명, 사용자 메모, object key, encrypted DEK, checksum, 카드 제목/날짜/AI 초안, report snapshot, share token/password hash가 남지 않도록 tombstone 값으로 스크럽한다.
 - 비민감 audit event는 타입, 카운트, 시간 등만 보관한다.
 - 사용자 화면에서는 삭제 전 확인 체크박스를 요구해 실수로 원본과 리포트를 삭제하는 일을 줄인다.
 
@@ -43,6 +44,8 @@
 - 공유 링크는 기본 14일 만료이며 선택적으로 비밀번호를 설정할 수 있다. 비밀번호가 설정된 링크는 별도 확인 후에만 리포트 내용을 렌더링한다.
 - 공유 링크 API는 저장된 token/password hash를 클라이언트로 반환하지 않는다.
 - 공유 링크 화면은 현재 evidence card를 다시 조회하지 않고 리포트 생성 시점의 immutable snapshot만 렌더링한다.
+- 리포트 snapshot이 없거나 손상된 경우 현재 카드로 fallback하지 않고 리포트 재생성을 요구한다.
+- 동의 기록은 서버 소유 consent version만 처리 gate로 인정하며, client가 보낸 stale/forged version은 결제/AI 처리 조건을 만족하지 않는다.
 - AI provider 응답은 법률 효력, 승소 가능성, 이혼 권유, 증거능력 단정 같은 금지 문구를 포함하면 거부하고 mock/degraded fallback 경로로 전환한다.
 
 ## 남은 검토 항목

@@ -10,7 +10,7 @@ export interface EvidenceCardReviewDto {
   people: Array<{ label?: string; rawMention?: string; confidence?: number }>;
   locations: string[];
   tags: Array<{ tag?: string; confidence?: number; rationale?: string }>;
-  aiDraftMetadata: { draft?: boolean; provider?: string; providerDegraded?: boolean };
+  aiDraftMetadata: { draft?: boolean; providerDegraded?: boolean };
   userMemo: string | null;
   confidenceLevel: 1 | 2 | 3 | 4 | 5;
   includeInReport: boolean;

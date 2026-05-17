@@ -34,6 +34,7 @@ export function AccountCaseList() {
   const [cases, setCases] = useState<CaseSummary[]>([]);
   const [message, setMessage] = useState('');
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [deleteConfirmed, setDeleteConfirmed] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     fetch('/api/cases', { cache: 'no-store' })
@@ -43,6 +44,10 @@ export function AccountCaseList() {
   }, []);
 
   async function deleteCase(caseId: string) {
+    if (!deleteConfirmed[caseId]) {
+      setMessage('삭제 전 확인 항목을 먼저 선택해 주세요.');
+      return;
+    }
     setDeleting(caseId);
     setMessage('');
     try {
@@ -75,8 +80,21 @@ export function AccountCaseList() {
               <div className="flex flex-wrap gap-2">
                 <Link className="button-secondary px-4 py-2" href={`/evidence/${item.id}/review`}>카드 검토</Link>
                 <Link className="button-secondary px-4 py-2" href={`/evidence/${item.id}/report`}>리포트·삭제</Link>
-                <button className="button-danger px-4 py-2" disabled={deleting === item.id} onClick={() => deleteCase(item.id)}>전체 삭제</button>
               </div>
+            </div>
+            <div className="mt-4 rounded-2xl border border-red-100 bg-red-50 p-4">
+              <label className="flex gap-3 text-sm font-semibold text-red-950">
+                <input
+                  type="checkbox"
+                  checked={Boolean(deleteConfirmed[item.id])}
+                  onChange={(event) => {
+                    const checked = event.currentTarget.checked;
+                    setDeleteConfirmed((prev) => ({ ...prev, [item.id]: checked }));
+                  }}
+                />
+                이 자료 묶음의 원본, 정리 초안, 리포트, 공유 링크를 삭제하거나 더 이상 열 수 없게 처리한다는 점을 이해했습니다.
+              </label>
+              <button className="button-danger mt-3 px-4 py-2" disabled={deleting === item.id || !deleteConfirmed[item.id]} onClick={() => deleteCase(item.id)}>전체 삭제</button>
             </div>
           </article>
         ))}

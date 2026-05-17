@@ -4,6 +4,7 @@ test('safeplan local mock happy path', async ({ page, context }) => {
   await page.goto('/');
   await page.getByRole('button', { name: '안전합니다' }).click();
   await page.getByRole('link', { name: '생존 시뮬레이터 시작' }).click();
+  await page.getByRole('link', { name: '위험 체크 완료 또는 건너뛰고 계속' }).click();
   await expect(page.getByTestId('runway-stopped')).toContainText('0.5개월');
   await page.getByRole('link', { name: '자료 정리 흐름으로 이동' }).click();
   await page.getByRole('button', { name: '안전 확인 후 업로드 시작' }).click();
@@ -65,8 +66,10 @@ test('safeplan local mock happy path', async ({ page, context }) => {
   await expect(sharePage.getByTestId('share-report')).toContainText('자료 타임라인');
   await sharePage.close();
 
-  await page.getByLabel(/삭제하거나 더 이상 열 수 없게 처리/).check();
-  await page.getByRole('button', { name: '자료 전체 삭제' }).click();
+  await page.goto('/account');
+  await expect(page.getByRole('heading', { name: '내 자료 묶음' })).toBeVisible();
+  await page.getByLabel(/이 자료 묶음의 원본/).check();
+  await page.getByRole('button', { name: '전체 삭제' }).click();
   await expect(page.getByRole('status')).toContainText('삭제');
 
   const deletedSharePage = await context.newPage();

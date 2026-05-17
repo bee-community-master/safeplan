@@ -2,16 +2,17 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { CURRENT_CONSENT_VERSION } from '@/lib/consent';
+import { bytesFromMb } from '@/lib/evidence';
 import { createAnonymousCase } from '@/server/db/cases';
-import { updateDb, resetLocalDbCache } from '@/server/db/local-store';
-import { storeEvidenceFiles } from '@/server/files/local';
-import { createPaymentIntent, completeMockPayment } from '@/server/payments/provider';
+import { updateDb, resetLocalDbCache, readDb } from '@/server/db/local-store';
+import { storeEvidenceFiles, toEvidenceFileUploadSummary } from '@/server/files/local';
+import { createPaymentIntent, completeMockPayment, toPaymentStatusDto } from '@/server/payments/provider';
 import { enqueueProcessingJob, processCaseTimeline } from '@/server/ai/timeline-orchestrator';
-import { generateReport, createShareLink, resolveShareToken, revokeShareLink, readReportPdf, toShareLinkSummary } from '@/server/reports/report-service';
+import { generateReport, createShareLink, resolveShareToken, revokeShareLink, readReportPdf, toShareLinkSummary, toReportSummary } from '@/server/reports/report-service';
 import { buildSharedReportPayload } from '@/server/reports/share-payload';
 import { deleteCaseDeep } from '@/server/db/deletion';
 import { sha256Hex } from '@/server/security/crypto';
-import { bytesFromMb } from '@/lib/evidence';
 
 let dir: string;
 
@@ -26,15 +27,14 @@ beforeEach(async () => {
 async function recordConsents(caseId: string, consentTypes: Array<'sensitive_data' | 'original_evidence' | 'ai_processing' | 'overseas_transfer' | 'payment'> = ['sensitive_data', 'original_evidence', 'ai_processing', 'overseas_transfer', 'payment']) {
   await updateDb((db) => {
     for (const consentType of consentTypes) {
-      db.consentRecords.push({ id: `consent_${consentType}_${db.consentRecords.length}`, caseId, consentType, version: 'test', acceptedAt: new Date().toISOString(), ipHash: sha256Hex('ip'), userAgentHash: sha256Hex('ua') });
+      db.consentRecords.push({ id: `consent_${consentType}_${db.consentRecords.length}`, caseId, consentType, version: CURRENT_CONSENT_VERSION, acceptedAt: new Date().toISOString(), ipHash: sha256Hex('ip'), userAgentHash: sha256Hex('ua') });
     }
   });
 }
 
 async function payCase(caseId: string) {
   const payment = await createPaymentIntent(caseId);
-  await completeMockPayment(caseId, payment.paymentId);
-  return payment;
+  return completeMockPayment(caseId, payment.paymentId);
 }
 
 describe('local happy path services', () => {
@@ -55,13 +55,18 @@ describe('local happy path services', () => {
   it('gates processing by consent/payment, creates report/share, then deletes deeply', async () => {
     const caseRecord = await createAnonymousCase('session-test');
     const sampleContent = Buffer.from('생활비를 끊겠다는 메시지와 날짜 2026-05-01');
-    await storeEvidenceFiles(caseRecord.id, [
+    const stored = await storeEvidenceFiles(caseRecord.id, [
       { name: 'sample.txt', mimeType: 'text/plain', sizeBytes: sampleContent.byteLength, contentBase64: sampleContent.toString('base64') }
     ]);
+    expect(toEvidenceFileUploadSummary(stored[0]!)).not.toHaveProperty('encryptedDek');
+    expect(toEvidenceFileUploadSummary(stored[0]!)).not.toHaveProperty('gcsObject');
     await enqueueProcessingJob(caseRecord.id);
     await expect(processCaseTimeline(caseRecord.id)).rejects.toThrow('payment_required');
     await recordConsents(caseRecord.id);
-    await payCase(caseRecord.id);
+    const paid = await payCase(caseRecord.id);
+    expect(toPaymentStatusDto(paid)).not.toHaveProperty('providerPaymentKey');
+    const paidAgain = await completeMockPayment(caseRecord.id, paid.id);
+    expect(paidAgain.paidAt).toBe(paid.paidAt);
     const processed = await processCaseTimeline(caseRecord.id);
     expect(processed.cardCount).toBe(1);
     await updateDb((db) => {
@@ -70,6 +75,8 @@ describe('local happy path services', () => {
       card.includeInReport = true;
     });
     const report = await generateReport(caseRecord.id);
+    expect(toReportSummary(report)).not.toHaveProperty('pdfObject');
+    expect(toReportSummary(report)).not.toHaveProperty('snapshotJson');
     const pdf = await readReportPdf(report.id);
     expect(pdf.pdf.subarray(0, 4).toString()).toBe('%PDF');
     const share = await createShareLink(report.id);
@@ -89,6 +96,18 @@ describe('local happy path services', () => {
     expect(deleted.deletedReports).toBe(1);
     expect(deleted.revokedShares).toBe(1);
     expect((await resolveShareToken(protectedShare.token, 'safe-pass-123')).status).toBe('not_found');
+    const afterDelete = await readDb();
+    const deletedJson = JSON.stringify({
+      files: afterDelete.evidenceFiles,
+      cards: afterDelete.evidenceCards,
+      reports: afterDelete.reports,
+      extractions: afterDelete.extractionResults,
+      shares: afterDelete.shareLinks
+    });
+    expect(deletedJson).not.toContain('sample.txt');
+    expect(deletedJson).not.toContain('생활비를 끊겠다는 메시지');
+    expect(deletedJson).not.toContain('자료 초안');
+    expect(deletedJson).not.toContain('safe-pass-123');
   });
 
   it('enforces cumulative upload limits for a case', async () => {
@@ -128,6 +147,10 @@ describe('local happy path services', () => {
     const caseRecord = await createAnonymousCase('session-consent-gate');
     const sampleContent = Buffer.from('2026-05-01 자료');
     await storeEvidenceFiles(caseRecord.id, [{ name: 'sample.txt', mimeType: 'text/plain', sizeBytes: sampleContent.byteLength, contentBase64: sampleContent.toString('base64') }]);
+    await expect(createPaymentIntent(caseRecord.id)).rejects.toThrow('payment_consent_required');
+    await updateDb((db) => {
+      db.consentRecords.push({ id: 'stale_payment_consent', caseId: caseRecord.id, consentType: 'payment', version: 'old-version', acceptedAt: new Date().toISOString(), ipHash: null, userAgentHash: null });
+    });
     await expect(createPaymentIntent(caseRecord.id)).rejects.toThrow('payment_consent_required');
 
     await recordConsents(caseRecord.id, ['sensitive_data', 'original_evidence', 'ai_processing', 'payment']);
@@ -170,5 +193,22 @@ describe('local happy path services', () => {
     const payload = await buildSharedReportPayload(report);
     expect(payload.cards).toHaveLength(1);
     expect(payload.cards[0]?.title).toBe('처음 생성한 제목');
+    await expect(buildSharedReportPayload({ ...report, snapshotJson: { malformed: true } as never })).rejects.toThrow('report_snapshot_unavailable');
+  });
+
+  it('keeps object keys unique and processing idempotent', async () => {
+    const caseRecord = await createAnonymousCase('session-idempotent');
+    const first = Buffer.from('동일 파일명 첫 번째');
+    const second = Buffer.from('동일 파일명 두 번째');
+    const files = await storeEvidenceFiles(caseRecord.id, [
+      { name: 'same.txt', mimeType: 'text/plain', sizeBytes: first.byteLength, contentBase64: first.toString('base64') },
+      { name: 'same.txt', mimeType: 'text/plain', sizeBytes: second.byteLength, contentBase64: second.toString('base64') }
+    ]);
+    expect(new Set(files.map((file) => file.gcsObject)).size).toBe(2);
+    await recordConsents(caseRecord.id);
+    await payCase(caseRecord.id);
+    await Promise.all([processCaseTimeline(caseRecord.id), processCaseTimeline(caseRecord.id)]);
+    const db = await readDb();
+    expect(db.evidenceCards.filter((card) => card.caseId === caseRecord.id && card.deletedAt === null)).toHaveLength(2);
   });
 });

@@ -1,5 +1,5 @@
 import { assertOwnsCase } from '@/server/auth/ownership';
-import { storeEvidenceFiles, type UploadInputFile } from '@/server/files/local';
+import { storeEvidenceFiles, toEvidenceFileUploadSummary, type UploadInputFile } from '@/server/files/local';
 import { jsonError, jsonOk } from '@/server/http';
 
 export async function POST(request: Request) {
@@ -7,7 +7,7 @@ export async function POST(request: Request) {
     const body = (await request.json()) as { caseId: string; files: UploadInputFile[] };
     await assertOwnsCase(body.caseId);
     const files = await storeEvidenceFiles(body.caseId, body.files);
-    return jsonOk({ files });
+    return jsonOk({ files: files.map(toEvidenceFileUploadSummary) });
   } catch (error) {
     return jsonError(error, 400);
   }

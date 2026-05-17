@@ -1,4 +1,5 @@
 import 'server-only';
+import { CURRENT_CONSENT_VERSION, REQUIRED_AI_CONSENT_TYPES, hasCurrentConsents } from '@/lib/consent';
 import { AI_TAGS } from '@/lib/constants';
 import { isRealAiProviderMode } from '@/lib/runtime';
 import type { BasetenClassifierResponse } from '@/lib/types';
@@ -12,14 +13,17 @@ import { mistralOcr } from './providers/mistral-ocr';
 import { mockClassify, mockOcr, mockStt } from './providers/mock';
 import { isProviderMissingCredentialError } from './providers/schema';
 
+const CLASSIFIER_GUARDRAIL_POLICY =
+  '한국어 상담자료 준비용 초안만 생성합니다. 법률 자문, 승소/패소 예측, 이혼 권유, 심리/의학 진단, 불법 자료 수집 안내, 무단 접근/해킹/위치추적/몰래 설치, 진정성 판단, 증거능력/법적 효력/법원 제출 가능성 단정을 하지 마세요. 모든 요약/태그/날짜/인물은 사용자가 확인해야 하는 초안이라고 표현하세요.';
+const PROCESSING_LEASE_MS = 15 * 60 * 1000;
+
 function warnProviderDegraded(provider: 'baseten' | 'groq' | 'mistral', error: unknown): void {
   if (isProviderMissingCredentialError(error)) return;
   console.warn('safeplan provider degraded', { provider, category: error instanceof Error ? error.message : String(error) });
 }
 
 function hasRequiredConsents(caseId: string, db: Awaited<ReturnType<typeof readDb>>): boolean {
-  const accepted = new Set(db.consentRecords.filter((item) => item.caseId === caseId).map((item) => item.consentType));
-  return accepted.has('ai_processing') && accepted.has('sensitive_data') && accepted.has('original_evidence') && accepted.has('overseas_transfer') && accepted.has('payment');
+  return hasCurrentConsents(db.consentRecords, caseId, REQUIRED_AI_CONSENT_TYPES);
 }
 
 function isPaid(caseId: string, db: Awaited<ReturnType<typeof readDb>>): boolean {
@@ -92,27 +96,46 @@ export async function enqueueProcessingJob(caseId: string): Promise<ProcessingJo
 }
 
 export async function processCaseTimeline(caseId: string): Promise<{ job: ProcessingJobRecord; cardCount: number; providerDegraded: boolean }> {
-  const before = await readDb();
-  const files = before.evidenceFiles.filter((file) => file.caseId === caseId && file.deletedAt === null);
-  const job = before.processingJobs.find((item) => item.caseId === caseId && ['queued', 'processing'].includes(item.status)) ?? (await enqueueProcessingJob(caseId));
-  if (!isPaid(caseId, before)) throw new Error('payment_required');
-  if (!hasRequiredConsents(caseId, before)) throw new Error('consent_required');
-  let providerDegraded = false;
-  let cardCount = 0;
-
-  await updateDb((db) => {
-    const mutableJob = db.processingJobs.find((item) => item.id === job.id);
-    if (mutableJob) {
-      mutableJob.status = 'processing';
-      mutableJob.attempts += 1;
-      mutableJob.updatedAt = new Date().toISOString();
+  const claim = await updateDb((db) => {
+    if (!isPaid(caseId, db)) throw new Error('payment_required');
+    if (!hasRequiredConsents(caseId, db)) throw new Error('consent_required');
+    const now = new Date().toISOString();
+    let mutableJob = db.processingJobs.find((item) => item.caseId === caseId && ['queued', 'processing'].includes(item.status));
+    if (!mutableJob) {
+      mutableJob = {
+        id: id('job'),
+        caseId,
+        fileId: null,
+        type: 'timeline',
+        status: 'queued',
+        attempts: 0,
+        lastError: null,
+        createdAt: now,
+        updatedAt: now
+      };
+      db.processingJobs.push(mutableJob);
+      db.auditEvents.push({ id: id('audit'), userId: db.cases.find((item) => item.id === caseId)?.userId ?? null, caseId, type: 'job.queued', metadataJson: { type: 'timeline' }, createdAt: now });
     }
+    if (mutableJob.status === 'processing' && Date.now() - new Date(mutableJob.updatedAt).getTime() < PROCESSING_LEASE_MS) {
+      return { claimed: false, job: mutableJob };
+    }
+    mutableJob.status = 'processing';
+    mutableJob.attempts += 1;
+    mutableJob.updatedAt = now;
     const caseRecord = db.cases.find((item) => item.id === caseId);
     if (caseRecord) {
       caseRecord.status = 'processing';
-      caseRecord.updatedAt = new Date().toISOString();
+      caseRecord.updatedAt = now;
     }
+    return { claimed: true, job: mutableJob };
   });
+  if (!claim.claimed) return { job: claim.job, cardCount: 0, providerDegraded: false };
+
+  const before = await readDb();
+  const files = before.evidenceFiles.filter((file) => file.caseId === caseId && file.deletedAt === null);
+  const job = claim.job;
+  let providerDegraded = false;
+  let cardCount = 0;
 
   for (const file of files) {
     const existing = (await readDb()).evidenceCards.some((card) => card.fileId === file.id && card.deletedAt === null);
@@ -122,6 +145,7 @@ export async function processCaseTimeline(caseId: string): Promise<{ job: Proces
     const classification = await classifyWithFallback({
       caseId,
       fileId: file.id,
+      guardrailPolicy: CLASSIFIER_GUARDRAIL_POLICY,
       materialType: file.materialType,
       ocrMarkdown: extracted.ocrMarkdown,
       transcript: extracted.transcript,
@@ -131,7 +155,8 @@ export async function processCaseTimeline(caseId: string): Promise<{ job: Proces
     });
     providerDegraded = providerDegraded || classification.degraded;
     const now = new Date().toISOString();
-    await updateDb((db) => {
+    const created = await updateDb((db) => {
+      if (db.evidenceCards.some((card) => card.fileId === file.id && card.deletedAt === null)) return false;
       const mutableFile = db.evidenceFiles.find((item) => item.id === file.id);
       if (mutableFile) mutableFile.processingStatus = providerDegraded ? 'provider_degraded' : 'processed';
       for (const raw of extracted.extractionRaw) {
@@ -178,8 +203,9 @@ export async function processCaseTimeline(caseId: string): Promise<{ job: Proces
         updatedAt: now,
         deletedAt: null
       });
+      return true;
     });
-    cardCount += 1;
+    if (created) cardCount += 1;
   }
 
   const finalJob = await updateDb((db) => {

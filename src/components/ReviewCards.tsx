@@ -17,6 +17,13 @@ const MATERIAL_LABELS: Record<string, string> = {
   unknown: '유형 확인 필요'
 };
 
+const DATE_SOURCE_LABELS: Record<string, string> = {
+  ocr: '추출 텍스트 기준',
+  metadata: '파일 정보 기준',
+  user: '사용자 입력 기준',
+  inferred: '자동 추정'
+};
+
 function joinOrFallback(items: string[], fallback = '표시할 내용 없음') {
   return items.filter(Boolean).join(', ') || fallback;
 }
@@ -28,7 +35,7 @@ function ReadOnlyMeta({ card }: { card: EvidenceCardReviewDto }) {
     <dl className="mt-4 grid gap-3 rounded-3xl border border-line bg-calm p-4 text-sm leading-6 md:grid-cols-2">
       <div>
         <dt className="font-bold text-ink">원본 파일</dt>
-        <dd className="text-muted">{card.originalFileName} <span className="text-xs">({card.fileId})</span></dd>
+        <dd className="text-muted">{card.originalFileName}</dd>
       </div>
       <div>
         <dt className="font-bold text-ink">자료 유형</dt>
@@ -36,11 +43,11 @@ function ReadOnlyMeta({ card }: { card: EvidenceCardReviewDto }) {
       </div>
       <div>
         <dt className="font-bold text-ink">날짜 후보·출처</dt>
-        <dd className="text-muted">{card.dateCandidate || '날짜 미상'} · {card.dateSource || '출처 확인 필요'}</dd>
+        <dd className="text-muted">{card.dateCandidate || '날짜 미상'} · {card.dateSource ? DATE_SOURCE_LABELS[card.dateSource] ?? '출처 확인 필요' : '출처 확인 필요'}</dd>
       </div>
       <div>
-        <dt className="font-bold text-ink">AI 초안 메타데이터</dt>
-        <dd className="text-muted">{card.aiDraftMetadata.provider || 'mock'} · {card.aiDraftMetadata.providerDegraded ? '대체 처리됨' : '초안'}</dd>
+        <dt className="font-bold text-ink">자동 정리 상태</dt>
+        <dd className="text-muted">{card.aiDraftMetadata.providerDegraded ? '일부 자동 처리가 제한되어 기본 정리로 표시' : '자동 정리 초안'} · 사용자 확인 필요</dd>
       </div>
       <div>
         <dt className="font-bold text-ink">인물 초안</dt>

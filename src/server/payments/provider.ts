@@ -1,4 +1,5 @@
 import 'server-only';
+import { hasCurrentConsent } from '@/lib/consent';
 import { PRICE_KRW } from '@/lib/constants';
 import { isProductionApp } from '@/lib/runtime';
 import { appUrl } from '@/lib/url';
@@ -17,6 +18,14 @@ export interface PaymentIntentResult {
   orderName?: string;
   successUrl?: string;
   failUrl?: string;
+}
+
+export interface PaymentStatusDto {
+  paymentId: string;
+  provider: PaymentIntentRecord['provider'];
+  amountKrw: number;
+  status: PaymentIntentRecord['status'];
+  paidAt: string | null;
 }
 
 export interface TossConfirmInput {
@@ -76,7 +85,7 @@ function tossAuthHeader(secretKey: string): string {
 }
 
 function hasPaymentConsent(caseId: string, db: Awaited<ReturnType<typeof readDb>>): boolean {
-  return db.consentRecords.some((record) => record.caseId === caseId && record.consentType === 'payment');
+  return hasCurrentConsent(db.consentRecords, caseId, 'payment');
 }
 
 function assertPaymentConsent(caseId: string, db: Awaited<ReturnType<typeof readDb>>): void {
@@ -167,6 +176,10 @@ async function markPaymentPaid(params: { caseId: string; paymentId: string; expe
     if (!payment) throw new Error('payment_not_found');
     if (payment.provider !== params.expectedProvider) throw new Error(params.expectedProvider === 'mock' ? 'mock_payment_only' : 'toss_payment_required');
     if (payment.amountKrw !== PRICE_KRW) throw new Error('payment_amount_mismatch');
+    if (payment.status === 'paid') {
+      if (payment.providerPaymentKey === params.providerPaymentKey) return payment;
+      throw new Error('payment_already_completed');
+    }
     payment.status = 'paid';
     payment.providerPaymentKey = params.providerPaymentKey;
     payment.paidAt = now;
@@ -190,6 +203,16 @@ async function markPaymentPaid(params: { caseId: string; paymentId: string; expe
 export async function completeMockPayment(caseId: string, paymentId: string): Promise<PaymentIntentRecord> {
   if (isProductionApp()) throw new Error('production_payment_provider_required');
   return markPaymentPaid({ caseId, paymentId, expectedProvider: 'mock', providerPaymentKey: `mock_${paymentId}` });
+}
+
+export function toPaymentStatusDto(payment: PaymentIntentRecord): PaymentStatusDto {
+  return {
+    paymentId: payment.id,
+    provider: payment.provider,
+    amountKrw: payment.amountKrw,
+    status: payment.status,
+    paidAt: payment.paidAt
+  };
 }
 
 async function markTossPaid(caseId: string, paymentId: string, paymentKey: string): Promise<PaymentIntentRecord> {

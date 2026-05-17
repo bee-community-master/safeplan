@@ -40,6 +40,7 @@ export interface RunwayScenarioResult {
 export interface BasetenClassifierInput {
   caseId: string;
   fileId: string;
+  guardrailPolicy: string;
   materialType: MaterialType;
   ocrMarkdown: string | null;
   transcript: string | null;

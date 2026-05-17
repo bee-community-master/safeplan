@@ -92,7 +92,7 @@ docker build -t safeplan:production-design .
 결과:
 
 - `pnpm lint`: 통과 (`next lint` no errors + `tsc --noEmit` 통과)
-- `pnpm test`: 통과 — 8 files, 18 tests
+- `pnpm test`: 통과 — 8 files, 19 tests
 - `pnpm build`: 통과 — Next.js 15.5.18 production build, 29 static pages generated
 - `pnpm e2e`: 통과 — Playwright Chromium happy path 1 passed, live-provider spec 1 skipped
 - `pnpm e2e:live`: 통과 — Playwright Chromium live provider full path 1 passed
@@ -149,7 +149,7 @@ pnpm e2e:live
 추가 검증:
 
 - `pnpm lint`: 통과
-- `pnpm test`: 통과 — 8 files, 18 tests
+- `pnpm test`: 통과 — 8 files, 19 tests
 - `pnpm build`: 통과 — 29 static pages
 - `pnpm e2e`: 통과 — happy path 1 passed, live-provider skipped
 - `pnpm e2e:live`: 통과 — Mistral OCR/Groq STT live path 1 passed
@@ -171,6 +171,28 @@ pnpm e2e:live
 
 - `pnpm lint`: 통과
 - `pnpm test`: 통과 — 8 files, 18 tests
+- `pnpm build`: 통과 — 29 static pages
+- `pnpm e2e`: 통과 — happy path 1 passed, live-provider skipped
+- `pnpm e2e:live`: 통과 — live provider path 1 passed
+
+## 2026-05-17 repeated code-review pass 2 hardening update
+
+두 번째 반복 리뷰에서 나온 privacy/security blocker를 추가 반영했다.
+
+- 삭제 시 원본 파일명, 사용자 메모, object/envelope metadata, 카드 제목/날짜/AI 초안, report snapshot, share password/token hash를 tombstone 형태로 스크럽한다.
+- 공유 payload는 snapshot이 없거나 손상된 리포트에서 현재 카드로 fallback하지 않고 재생성을 요구한다.
+- 동의 version은 서버 소유 `CURRENT_CONSENT_VERSION`으로만 저장·검증하며 stale/forged version은 결제/AI 처리 gate를 통과하지 못한다.
+- 업로드/결제/리포트 API 응답은 storage key, encrypted DEK, provider payment key, PDF object, snapshot internals를 반환하지 않는 DTO로 축소했다.
+- job processing은 active processing lease를 확인하고, provider work 이후 DB mutation 안에서 active card 존재를 재확인해 중복 카드/추출 생성을 막는다.
+- evidence/report object key는 timestamp 대신 record id를 포함해 동일 파일명/동일 시각 충돌을 피한다.
+- payment completion은 같은 provider key로 반복 호출될 경우 기존 paid record를 반환하고 `paidAt`/audit을 중복 변경하지 않는다.
+- first-entry safety popup은 app layout에 올리고, simulator 진입 전 위험 체크 완료/건너뛰기 gate를 추가했다.
+- `/account` 삭제도 report 화면과 같은 확인 체크박스를 요구한다.
+
+추가 검증:
+
+- `pnpm lint`: 통과
+- `pnpm test`: 통과 — 8 files, 19 tests
 - `pnpm build`: 통과 — 29 static pages
 - `pnpm e2e`: 통과 — happy path 1 passed, live-provider skipped
 - `pnpm e2e:live`: 통과 — live provider path 1 passed

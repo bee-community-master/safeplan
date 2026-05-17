@@ -19,7 +19,8 @@ export async function generateReport(caseId: string): Promise<ReportRecord> {
   const files = db.evidenceFiles.filter((file) => file.caseId === caseId && file.deletedAt === null && includedFileIds.has(file.id));
   const pdf = await generateReportPdf({ caseRecord, cards, files });
   const now = new Date().toISOString();
-  const objectName = `${caseId}/${Date.now()}-safeplan-report.pdf`;
+  const reportId = id('report');
+  const objectName = `${caseId}/${reportId}-safeplan-report.pdf`;
   const pdfBucket = process.env.GCS_BUCKET_REPORTS || 'local-reports';
   const pdfSha256 = sha256Hex(pdf);
   const snapshotCards: ReportSnapshot['cards'] = cards.map((card) => ({
@@ -31,35 +32,40 @@ export async function generateReport(caseId: string): Promise<ReportRecord> {
     summaryKo: card.summaryKo
   }));
   await writeObject(pdfBucket, objectName, pdf, 'application/pdf');
-  return updateDb((mutableDb) => {
-    const version = mutableDb.reports.filter((item) => item.caseId === caseId).length + 1;
-    const snapshot: ReportSnapshot = {
-      version,
-      generatedAt: now,
-      includedFileIds: [...includedFileIds],
-      pdfSha256,
-      fileCount: files.length,
-      cards: snapshotCards
-    };
-    const record: ReportRecord = {
-      id: id('report'),
-      caseId,
-      version,
-      pdfBucket,
-      pdfObject: objectName,
-      snapshotJson: snapshot,
-      generatedAt: now,
-      deletedAt: null
-    };
-    mutableDb.reports.push(record);
-    const mutableCase = mutableDb.cases.find((item) => item.id === caseId);
-    if (mutableCase) {
-      mutableCase.status = 'reported';
-      mutableCase.updatedAt = now;
-    }
-    mutableDb.auditEvents.push({ id: id('audit'), userId: caseRecord.userId, caseId, type: 'report.generated', metadataJson: { cardCount: cards.length }, createdAt: now });
-    return record;
-  });
+  try {
+    return await updateDb((mutableDb) => {
+      const version = mutableDb.reports.filter((item) => item.caseId === caseId).length + 1;
+      const snapshot: ReportSnapshot = {
+        version,
+        generatedAt: now,
+        includedFileIds: [...includedFileIds],
+        pdfSha256,
+        fileCount: files.length,
+        cards: snapshotCards
+      };
+      const record: ReportRecord = {
+        id: reportId,
+        caseId,
+        version,
+        pdfBucket,
+        pdfObject: objectName,
+        snapshotJson: snapshot,
+        generatedAt: now,
+        deletedAt: null
+      };
+      mutableDb.reports.push(record);
+      const mutableCase = mutableDb.cases.find((item) => item.id === caseId);
+      if (mutableCase) {
+        mutableCase.status = 'reported';
+        mutableCase.updatedAt = now;
+      }
+      mutableDb.auditEvents.push({ id: id('audit'), userId: caseRecord.userId, caseId, type: 'report.generated', metadataJson: { cardCount: cards.length }, createdAt: now });
+      return record;
+    });
+  } catch (error) {
+    await deleteObject(pdfBucket, objectName).catch(() => undefined);
+    throw error;
+  }
 }
 
 export async function readReportPdf(reportId: string): Promise<{ report: ReportRecord; pdf: Buffer }> {
@@ -67,6 +73,10 @@ export async function readReportPdf(reportId: string): Promise<{ report: ReportR
   const report = db.reports.find((item) => item.id === reportId && item.deletedAt === null);
   if (!report) throw new Error('report_not_found');
   return { report, pdf: await readObject(report.pdfBucket, report.pdfObject) };
+}
+
+export function toReportSummary(report: ReportRecord): { id: string; version: number; generatedAt: string } {
+  return { id: report.id, version: report.version, generatedAt: report.generatedAt };
 }
 
 export async function deleteReportObject(report: ReportRecord): Promise<void> {

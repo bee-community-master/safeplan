@@ -9,6 +9,7 @@ describe('provider mocks and parsing', () => {
     const card = await mockClassify({
       caseId: 'case_1',
       fileId: 'file_1',
+      guardrailPolicy: 'test guardrail',
       materialType: 'text_note',
       ocrMarkdown: ocr.markdown,
       transcript: stt.transcript,
@@ -37,5 +38,22 @@ describe('provider mocks and parsing', () => {
         legalCaution: '법원에서 인정됩니다.'
       })
     ).toThrow();
+    for (const phrase of ['이혼을 권합니다', '진단됩니다', '진짜 증거입니다', '법원 제출 가능', '몰래 설치해 위치추적']) {
+      expect(() =>
+        basetenResponseSchema.parse({
+          title: '검토 필요 초안',
+          summaryKo: phrase,
+          materialType: 'text_note',
+          dateCandidates: [],
+          people: [],
+          locations: [],
+          tags: [{ tag: '기타/검토 필요', confidence: 0.5, rationale: '사용자 확인 필요' }],
+          confidenceLevel: 3,
+          includeInReportDefault: false,
+          needsUserReview: true,
+          legalCaution: '자료 취득 경위 및 제출 가능성은 변호사 검토 필요'
+        })
+      ).toThrow();
+    }
   });
 });

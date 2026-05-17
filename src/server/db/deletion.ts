@@ -1,4 +1,5 @@
 import 'server-only';
+import type { ReportSnapshot } from '@/lib/share';
 import { deleteEvidenceObject } from '@/server/files/local';
 import { deleteReportObject } from '@/server/reports/report-service';
 import { id } from '@/server/security/crypto';
@@ -18,6 +19,14 @@ export async function deleteCaseDeep(caseId: string): Promise<{
   for (const report of reportsBefore) await deleteReportObject(report);
 
   const now = new Date().toISOString();
+  const deletedSnapshot = (reportId: string): ReportSnapshot => ({
+    version: 0,
+    generatedAt: now,
+    includedFileIds: [],
+    pdfSha256: `deleted:${reportId}`,
+    fileCount: 0,
+    cards: []
+  });
   return updateDb((db) => {
     const caseRecord = db.cases.find((item) => item.id === caseId);
     if (caseRecord) {
@@ -32,6 +41,13 @@ export async function deleteCaseDeep(caseId: string): Promise<{
     for (const file of db.evidenceFiles.filter((item) => item.caseId === caseId)) {
       if (!file.deletedAt) file.deletedAt = now;
       file.processingStatus = 'deleted';
+      file.originalName = '삭제된 자료';
+      file.gcsBucket = '';
+      file.gcsObject = '';
+      file.encryptedDek = '';
+      file.checksumSha256 = '';
+      file.userMemo = null;
+      file.materialType = 'unknown';
     }
     for (const result of db.extractionResults.filter((item) => files.some((file) => file.id === item.fileId))) {
       if (!result.deletedAt) {
@@ -46,7 +62,10 @@ export async function deleteCaseDeep(caseId: string): Promise<{
         card.deletedAt = now;
         deletedCards += 1;
       }
+      card.title = '삭제된 자료';
       card.summaryKo = '삭제된 자료입니다.';
+      card.dateCandidate = null;
+      card.dateSource = null;
       card.userMemo = null;
       card.aiDraftJson = { deleted: true };
       card.peopleJson = [];
@@ -59,9 +78,16 @@ export async function deleteCaseDeep(caseId: string): Promise<{
         report.deletedAt = now;
         deletedReports += 1;
       }
-      for (const share of db.shareLinks.filter((item) => item.reportId === report.id && item.revokedAt === null)) {
-        share.revokedAt = now;
-        revokedShares += 1;
+      report.pdfBucket = '';
+      report.pdfObject = '';
+      report.snapshotJson = deletedSnapshot(report.id);
+      for (const share of db.shareLinks.filter((item) => item.reportId === report.id)) {
+        if (share.revokedAt === null) {
+          share.revokedAt = now;
+          revokedShares += 1;
+        }
+        share.tokenHash = `deleted_${share.id}`;
+        share.passwordHash = null;
       }
     }
     for (const job of db.processingJobs.filter((item) => item.caseId === caseId)) {

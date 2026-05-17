@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { BrandMark, PrimaryLink } from '@/components/DesignSystem';
+import { SafetyPopup } from '@/components/SafetyPopup';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -10,7 +11,7 @@ export const metadata: Metadata = {
 };
 
 const navItems = [
-  ['생존 시뮬레이터', '/simulator'],
+  ['생존 시뮬레이터', '/safety'],
   ['자료 정리', '/evidence/start'],
   ['가격', '/pricing'],
   ['도움말', '/help']
@@ -20,6 +21,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ko">
       <body>
+        <SafetyPopup />
         <div className="min-h-screen">
           <header className="sticky top-0 z-40 border-b border-line/80 bg-paper/85 backdrop-blur-xl">
             <nav className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-4 text-sm sm:flex-row sm:items-center sm:justify-between" aria-label="주요 메뉴">

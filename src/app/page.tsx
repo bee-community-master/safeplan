@@ -1,17 +1,15 @@
-import { SafetyPopup } from '@/components/SafetyPopup';
 import { SafetyNotice } from '@/components/SafetyNotice';
 import { GuardrailGrid, PageHero, PrimaryLink, ProductFlowPreview, RouteCards, SecondaryLink } from '@/components/DesignSystem';
 
 export default function LandingPage() {
   return (
     <div className="space-y-8">
-      <SafetyPopup />
       <section className="grid items-stretch gap-6 lg:grid-cols-[0.95fr_1.05fr]">
         <PageHero
           title="지금의 선택이 내일의 안전을 만듭니다"
           description="독립 세이프플랜은 재정 입력값을 서버에 저장하지 않는 생존 시뮬레이터와, 사용자가 확인한 자료만 리포트와 보안 링크로 정리하는 서비스입니다."
         >
-          <PrimaryLink href="/simulator">생존 시뮬레이터 시작</PrimaryLink>
+          <PrimaryLink href="/safety">생존 시뮬레이터 시작</PrimaryLink>
           <SecondaryLink href="/evidence/start">자료 정리 시작</SecondaryLink>
         </PageHero>
         <ProductFlowPreview />

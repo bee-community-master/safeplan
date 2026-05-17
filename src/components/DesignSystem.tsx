@@ -9,7 +9,7 @@ export const productFlow = [
 ] as const;
 
 export const routeCards = [
-  { href: '/simulator', title: '생존 시뮬레이터', body: '0.5개월 단위로 보수적으로 계산하고 생활비 지원 시나리오를 비교합니다.' },
+  { href: '/safety', title: '생존 시뮬레이터', body: '안전 확인 뒤 0.5개월 단위로 보수적으로 계산하고 생활비 지원 시나리오를 비교합니다.' },
   { href: '/evidence/start', title: '자료 정리', body: '업로드, 동의, 결제, 자동 정리, 사용자 확인까지 한 흐름으로 진행합니다.' },
   { href: '/pricing', title: '가격·환불', body: `자료 묶음 1건 ${PRICE_KRW.toLocaleString('ko-KR')}원, 환불 기준과 포함 범위를 먼저 확인합니다.` },
   { href: '/help', title: '도움말', body: '안전 사용, 자료 준비, 삭제와 고객지원 안내를 한곳에서 확인합니다.' }
