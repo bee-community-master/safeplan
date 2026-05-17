@@ -176,6 +176,24 @@ describe('local happy path services', () => {
     await expect(processCaseTimeline(caseRecord.id)).rejects.toThrow('consent_required');
   });
 
+  it('uses photo file title dates instead of upload or today fallback dates', async () => {
+    const caseRecord = await createAnonymousCase('session-photo-date');
+    const content = Buffer.from('mock jpeg body without exif date');
+    await storeEvidenceFiles(caseRecord.id, [
+      { name: 'KakaoTalk_20240418_101010.jpg', mimeType: 'image/jpeg', sizeBytes: content.byteLength, contentBase64: content.toString('base64') }
+    ]);
+    await recordConsents(caseRecord.id);
+    await payCase(caseRecord.id);
+    await processCaseTimeline(caseRecord.id);
+
+    const db = await readDb();
+    const card = db.evidenceCards.find((item) => item.caseId === caseRecord.id)!;
+    expect(card.dateCandidate).toBe('2024-04-18');
+    expect(card.dateSource).toBe('metadata');
+    expect(JSON.stringify(card.aiDraftJson)).toContain('"sourceDetail":"filename"');
+    expect(card.dateCandidate).not.toBe(new Date().toISOString().slice(0, 10));
+  });
+
   it('serves share links from an immutable report snapshot', async () => {
     const caseRecord = await createAnonymousCase('session-report-snapshot');
     const firstContent = Buffer.from('2026-05-01 생활비 자료');
