@@ -88,7 +88,7 @@ export async function storeEvidenceFiles(caseId: string, files: UploadInputFile[
       mimeType: file.mimeType,
       sizeBytes: file.actualSizeBytes,
       gcsBucket: process.env.GCS_BUCKET_ORIGINALS || 'local-originals',
-      gcsObject: `${caseId}/${recordId}-${file.name.replace(/[^a-zA-Z0-9가-힣._-]/g, '_')}.enc`,
+      gcsObject: `${caseId}/${recordId}.enc`,
       encryptedDek: encrypted.encryptedDek,
       checksumSha256: encrypted.checksumSha256,
       materialType: inferMaterialType(file.mimeType, file.name),

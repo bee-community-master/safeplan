@@ -97,6 +97,8 @@ export async function enqueueProcessingJob(caseId: string): Promise<ProcessingJo
 
 export async function processCaseTimeline(caseId: string): Promise<{ job: ProcessingJobRecord; cardCount: number; providerDegraded: boolean }> {
   const claim = await updateDb((db) => {
+    const activeCase = db.cases.find((item) => item.id === caseId && item.deletedAt === null);
+    if (!activeCase) throw new Error('case_not_found');
     if (!isPaid(caseId, db)) throw new Error('payment_required');
     if (!hasRequiredConsents(caseId, db)) throw new Error('consent_required');
     const now = new Date().toISOString();
@@ -122,11 +124,8 @@ export async function processCaseTimeline(caseId: string): Promise<{ job: Proces
     mutableJob.status = 'processing';
     mutableJob.attempts += 1;
     mutableJob.updatedAt = now;
-    const caseRecord = db.cases.find((item) => item.id === caseId);
-    if (caseRecord) {
-      caseRecord.status = 'processing';
-      caseRecord.updatedAt = now;
-    }
+    activeCase.status = 'processing';
+    activeCase.updatedAt = now;
     return { claimed: true, job: mutableJob };
   });
   if (!claim.claimed) return { job: claim.job, cardCount: 0, providerDegraded: false };
@@ -156,9 +155,12 @@ export async function processCaseTimeline(caseId: string): Promise<{ job: Proces
     providerDegraded = providerDegraded || classification.degraded;
     const now = new Date().toISOString();
     const created = await updateDb((db) => {
+      const activeCase = db.cases.find((item) => item.id === caseId && item.deletedAt === null);
+      const activeFile = db.evidenceFiles.find((item) => item.id === file.id && item.caseId === caseId && item.deletedAt === null);
+      const activeJob = db.processingJobs.find((item) => item.id === job.id && item.caseId === caseId);
+      if (!activeCase || !activeFile || !activeJob || activeJob.status !== 'processing') return false;
       if (db.evidenceCards.some((card) => card.fileId === file.id && card.deletedAt === null)) return false;
-      const mutableFile = db.evidenceFiles.find((item) => item.id === file.id);
-      if (mutableFile) mutableFile.processingStatus = providerDegraded ? 'provider_degraded' : 'processed';
+      activeFile.processingStatus = providerDegraded ? 'provider_degraded' : 'processed';
       for (const raw of extracted.extractionRaw) {
         db.extractionResults.push({
           id: id('extract'),
@@ -210,14 +212,13 @@ export async function processCaseTimeline(caseId: string): Promise<{ job: Proces
 
   const finalJob = await updateDb((db) => {
     const mutableJob = db.processingJobs.find((item) => item.id === job.id)!;
+    const caseRecord = db.cases.find((item) => item.id === caseId);
+    if (!mutableJob || mutableJob.status !== 'processing' || !caseRecord || caseRecord.deletedAt !== null) return mutableJob;
     mutableJob.status = providerDegraded ? 'provider_degraded' : 'succeeded';
     mutableJob.lastError = providerDegraded ? 'provider_degraded_fallback_to_mock' : null;
     mutableJob.updatedAt = new Date().toISOString();
-    const caseRecord = db.cases.find((item) => item.id === caseId);
-    if (caseRecord) {
-      caseRecord.status = 'review';
-      caseRecord.updatedAt = mutableJob.updatedAt;
-    }
+    caseRecord.status = 'review';
+    caseRecord.updatedAt = mutableJob.updatedAt;
     db.auditEvents.push({ id: id('audit'), userId: caseRecord?.userId ?? null, caseId, type: 'job.processed', metadataJson: { cardCount, providerDegraded }, createdAt: mutableJob.updatedAt });
     return mutableJob;
   });

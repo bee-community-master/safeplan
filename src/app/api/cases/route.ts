@@ -14,7 +14,6 @@ export async function GET() {
         const files = db.evidenceFiles.filter((file) => file.caseId === caseRecord.id && file.deletedAt === null);
         const cards = db.evidenceCards.filter((card) => card.caseId === caseRecord.id && card.deletedAt === null);
         const reports = db.reports.filter((report) => report.caseId === caseRecord.id && report.deletedAt === null);
-        const latestReport = reports.sort((a, b) => b.generatedAt.localeCompare(a.generatedAt))[0] ?? null;
         return {
           id: caseRecord.id,
           title: caseRecord.title,
@@ -24,8 +23,7 @@ export async function GET() {
           retentionUntil: caseRecord.retentionUntil,
           fileCount: files.length,
           cardCount: cards.length,
-          reportCount: reports.length,
-          latestReportId: latestReport?.id ?? null
+          reportCount: reports.length
         };
       });
     return jsonOk({ cases });

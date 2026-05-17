@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { CURRENT_CONSENT_VERSION } from '@/lib/consent';
 import { LEGAL_CAUTION_COPY, SUPPORTED_MIME_TYPES } from '@/lib/constants';
 import { validateUploadCandidates } from '@/lib/evidence';
 import { EvidenceConsentChecklist, INITIAL_CONSENTS, type ConsentState } from './EvidenceConsentChecklist';
@@ -72,7 +73,7 @@ export function EvidenceUploadFlow({ caseId }: { caseId: string }) {
     const response = await fetch('/api/consents', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ caseId, consentTypes: ['sensitive_data', 'original_evidence', 'ai_processing', 'overseas_transfer', 'payment'] })
+      body: JSON.stringify({ caseId, consentTypes: ['sensitive_data', 'original_evidence', 'ai_processing', 'overseas_transfer', 'payment'], version: CURRENT_CONSENT_VERSION })
     });
     await expectJson(response, 'consent_failed');
     setStage('consented');

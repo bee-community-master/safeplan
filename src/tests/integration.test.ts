@@ -21,6 +21,7 @@ beforeEach(async () => {
   dir = await mkdtemp(path.join(tmpdir(), 'safeplan-test-'));
   process.env.SAFEPLAN_DATA_DIR = dir;
   process.env.AI_PROVIDER_MODE = 'mock';
+  delete process.env.SAFEPLAN_TEST_REPORT_PERSIST_DELAY_MS;
   resetLocalDbCache();
 });
 
@@ -196,6 +197,33 @@ describe('local happy path services', () => {
     await expect(buildSharedReportPayload({ ...report, snapshotJson: { malformed: true } as never })).rejects.toThrow('report_snapshot_unavailable');
   });
 
+  it('rejects report persistence when reviewed cards change during PDF generation', async () => {
+    const caseRecord = await createAnonymousCase('session-report-race');
+    const content = Buffer.from('리포트 race 자료');
+    await storeEvidenceFiles(caseRecord.id, [{ name: 'race.txt', mimeType: 'text/plain', sizeBytes: content.byteLength, contentBase64: content.toString('base64') }]);
+    await recordConsents(caseRecord.id);
+    await payCase(caseRecord.id);
+    await processCaseTimeline(caseRecord.id);
+    await updateDb((db) => {
+      const card = db.evidenceCards.find((item) => item.caseId === caseRecord.id)!;
+      card.userConfirmed = true;
+      card.includeInReport = true;
+      card.updatedAt = new Date().toISOString();
+    });
+    process.env.SAFEPLAN_TEST_REPORT_PERSIST_DELAY_MS = '25';
+    const pending = generateReport(caseRecord.id);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await updateDb((db) => {
+      const card = db.evidenceCards.find((item) => item.caseId === caseRecord.id)!;
+      card.title = '변경된 제목';
+      card.updatedAt = new Date().toISOString();
+    });
+    await expect(pending).rejects.toThrow('report_input_changed');
+    delete process.env.SAFEPLAN_TEST_REPORT_PERSIST_DELAY_MS;
+    const db = await readDb();
+    expect(db.reports.filter((report) => report.caseId === caseRecord.id && report.deletedAt === null)).toHaveLength(0);
+  });
+
   it('keeps object keys unique and processing idempotent', async () => {
     const caseRecord = await createAnonymousCase('session-idempotent');
     const first = Buffer.from('동일 파일명 첫 번째');
@@ -205,10 +233,25 @@ describe('local happy path services', () => {
       { name: 'same.txt', mimeType: 'text/plain', sizeBytes: second.byteLength, contentBase64: second.toString('base64') }
     ]);
     expect(new Set(files.map((file) => file.gcsObject)).size).toBe(2);
+    expect(files.every((file) => !file.gcsObject.includes('same.txt'))).toBe(true);
     await recordConsents(caseRecord.id);
     await payCase(caseRecord.id);
     await Promise.all([processCaseTimeline(caseRecord.id), processCaseTimeline(caseRecord.id)]);
     const db = await readDb();
     expect(db.evidenceCards.filter((card) => card.caseId === caseRecord.id && card.deletedAt === null)).toHaveLength(2);
+  });
+
+  it('does not persist processing results after a case is deleted', async () => {
+    const caseRecord = await createAnonymousCase('session-delete-race');
+    const content = Buffer.from('삭제 race 자료');
+    await storeEvidenceFiles(caseRecord.id, [{ name: 'race.txt', mimeType: 'text/plain', sizeBytes: content.byteLength, contentBase64: content.toString('base64') }]);
+    await recordConsents(caseRecord.id);
+    await payCase(caseRecord.id);
+    await enqueueProcessingJob(caseRecord.id);
+    await deleteCaseDeep(caseRecord.id);
+    await expect(processCaseTimeline(caseRecord.id)).rejects.toThrow('case_not_found');
+    const db = await readDb();
+    expect(db.evidenceCards.filter((card) => card.caseId === caseRecord.id && card.deletedAt === null)).toHaveLength(0);
+    expect(db.extractionResults.some((extraction) => extraction.normalizedText?.includes('삭제 race 자료'))).toBe(false);
   });
 });

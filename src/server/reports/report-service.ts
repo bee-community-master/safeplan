@@ -1,11 +1,24 @@
 import 'server-only';
 import { LIMITS } from '@/lib/constants';
 import type { ReportSnapshot, ShareLinkSummaryDto } from '@/lib/share';
+import { isProductionApp } from '@/lib/runtime';
 import type { ReportRecord, ShareLinkRecord } from '@/server/db/types';
 import { readDb, updateDb } from '@/server/db/local-store';
 import { deleteObject, readObject, writeObject } from '@/server/files/object-store';
 import { hashSecret, id, randomToken, sha256Hex, verifySecret } from '@/server/security/crypto';
 import { generateReportPdf } from './pdf';
+
+type ReportInputCardState = {
+  id: string;
+  fileId: string;
+  updatedAt: string;
+};
+
+async function waitForReportPersistTestHook(): Promise<void> {
+  if (isProductionApp()) return;
+  const delayMs = Number(process.env.SAFEPLAN_TEST_REPORT_PERSIST_DELAY_MS || 0);
+  if (delayMs > 0) await new Promise((resolve) => setTimeout(resolve, delayMs));
+}
 
 export async function generateReport(caseId: string): Promise<ReportRecord> {
   const db = await readDb();
@@ -16,6 +29,7 @@ export async function generateReport(caseId: string): Promise<ReportRecord> {
   );
   if (cards.length === 0) throw new Error('no_confirmed_cards');
   const includedFileIds = new Set(cards.map((card) => card.fileId));
+  const cardStates: ReportInputCardState[] = cards.map((card) => ({ id: card.id, fileId: card.fileId, updatedAt: card.updatedAt }));
   const files = db.evidenceFiles.filter((file) => file.caseId === caseId && file.deletedAt === null && includedFileIds.has(file.id));
   const pdf = await generateReportPdf({ caseRecord, cards, files });
   const now = new Date().toISOString();
@@ -31,8 +45,19 @@ export async function generateReport(caseId: string): Promise<ReportRecord> {
     summaryKo: card.summaryKo
   }));
   await writeObject(pdfBucket, objectName, pdf, 'application/pdf');
+  await waitForReportPersistTestHook();
   try {
     return await updateDb((mutableDb) => {
+      const currentCase = mutableDb.cases.find((item) => item.id === caseId && item.deletedAt === null);
+      if (!currentCase) throw new Error('report_input_changed');
+      for (const state of cardStates) {
+        const currentCard = mutableDb.evidenceCards.find((card) => card.id === state.id);
+        if (!currentCard || currentCard.deletedAt !== null || !currentCard.userConfirmed || !currentCard.includeInReport || currentCard.updatedAt !== state.updatedAt) {
+          throw new Error('report_input_changed');
+        }
+        const currentFile = mutableDb.evidenceFiles.find((file) => file.id === state.fileId);
+        if (!currentFile || currentFile.deletedAt !== null || currentFile.caseId !== caseId) throw new Error('report_input_changed');
+      }
       const version = mutableDb.reports.filter((item) => item.caseId === caseId).length + 1;
       const snapshot: ReportSnapshot = {
         version,
@@ -53,11 +78,8 @@ export async function generateReport(caseId: string): Promise<ReportRecord> {
         deletedAt: null
       };
       mutableDb.reports.push(record);
-      const mutableCase = mutableDb.cases.find((item) => item.id === caseId);
-      if (mutableCase) {
-        mutableCase.status = 'reported';
-        mutableCase.updatedAt = now;
-      }
+      currentCase.status = 'reported';
+      currentCase.updatedAt = now;
       mutableDb.auditEvents.push({ id: id('audit'), userId: caseRecord.userId, caseId, type: 'report.generated', metadataJson: { cardCount: cards.length }, createdAt: now });
       return record;
     });

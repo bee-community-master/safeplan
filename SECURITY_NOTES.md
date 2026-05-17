@@ -23,6 +23,7 @@
 
 - 원본 증거, OCR 텍스트, 전사, 이름/주소/전화번호/자녀 정보, 결제 secret을 로그로 남기지 않는다.
 - provider 장애 로그는 provider 이름과 오류 category만 남긴다.
+- 원본 파일명은 object key에 포함하지 않고 opaque record id 기반 key만 사용해 GCS audit/listing 표면의 민감정보 노출을 줄인다.
 
 ## 운영자 접근 제한
 
@@ -46,6 +47,7 @@
 - 공유 링크 화면은 현재 evidence card를 다시 조회하지 않고 리포트 생성 시점의 immutable snapshot만 렌더링한다.
 - 리포트 snapshot이 없거나 손상된 경우 현재 카드로 fallback하지 않고 리포트 재생성을 요구한다.
 - 동의 기록은 서버 소유 consent version만 처리 gate로 인정하며, client가 보낸 stale/forged version은 결제/AI 처리 조건을 만족하지 않는다.
+- 리포트 생성과 AI 처리 결과 저장은 persist 직전 case/card/file/job 상태를 재확인해 삭제 또는 사용자 수정과 겹친 stale 결과를 저장하지 않는다.
 - AI provider 응답은 법률 효력, 승소 가능성, 이혼 권유, 증거능력 단정 같은 금지 문구를 포함하면 거부하고 mock/degraded fallback 경로로 전환한다.
 
 ## 남은 검토 항목

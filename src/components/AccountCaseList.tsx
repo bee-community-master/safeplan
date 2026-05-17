@@ -13,7 +13,6 @@ type CaseSummary = {
   fileCount: number;
   cardCount: number;
   reportCount: number;
-  latestReportId: string | null;
 };
 
 const STATUS_LABELS: Record<string, string> = {

@@ -1,19 +1,12 @@
-import { z } from 'zod';
-import { CURRENT_CONSENT_VERSION } from '@/lib/consent';
+import { CURRENT_CONSENT_VERSION, consentRequestSchema } from '@/lib/consent';
 import { assertOwnsCase } from '@/server/auth/ownership';
 import { updateDb } from '@/server/db/local-store';
 import { jsonError, jsonOk } from '@/server/http';
 import { id, safeMetadataHash } from '@/server/security/crypto';
 
-const schema = z.object({
-  caseId: z.string(),
-  consentTypes: z.array(z.enum(['ai_processing', 'sensitive_data', 'overseas_transfer', 'payment', 'original_evidence'])),
-  version: z.string().optional()
-});
-
 export async function POST(request: Request) {
   try {
-    const body = schema.parse(await request.json());
+    const body = consentRequestSchema.parse(await request.json());
     await assertOwnsCase(body.caseId);
     const now = new Date().toISOString();
     const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null;

@@ -92,7 +92,7 @@ docker build -t safeplan:production-design .
 결과:
 
 - `pnpm lint`: 통과 (`next lint` no errors + `tsc --noEmit` 통과)
-- `pnpm test`: 통과 — 8 files, 19 tests
+- `pnpm test`: 통과 — 8 files, 21 tests
 - `pnpm build`: 통과 — Next.js 15.5.18 production build, 29 static pages generated
 - `pnpm e2e`: 통과 — Playwright Chromium happy path 1 passed, live-provider spec 1 skipped
 - `pnpm e2e:live`: 통과 — Playwright Chromium live provider full path 1 passed
@@ -149,7 +149,7 @@ pnpm e2e:live
 추가 검증:
 
 - `pnpm lint`: 통과
-- `pnpm test`: 통과 — 8 files, 19 tests
+- `pnpm test`: 통과 — 8 files, 21 tests
 - `pnpm build`: 통과 — 29 static pages
 - `pnpm e2e`: 통과 — happy path 1 passed, live-provider skipped
 - `pnpm e2e:live`: 통과 — Mistral OCR/Groq STT live path 1 passed
@@ -172,6 +172,23 @@ pnpm e2e:live
 - `pnpm lint`: 통과
 - `pnpm test`: 통과 — 8 files, 18 tests
 - `pnpm build`: 통과 — 29 static pages
+- `pnpm e2e`: 통과 — happy path 1 passed, live-provider skipped
+- `pnpm e2e:live`: 통과 — live provider path 1 passed
+
+## 2026-05-17 repeated code-review pass 4 race/privacy update
+
+네 번째 architecture 리뷰에서 나온 race/privacy blocker를 추가 반영했다.
+
+- GCS/local object key에서 원본 파일명을 제거하고 opaque record id만 사용한다.
+- 처리 결과 persist 직전 case/file/job 상태를 재검증해 삭제 후 extraction/card가 다시 쓰이지 않게 했다.
+- 리포트 PDF 생성 후 persist 직전 case/card/file 상태와 카드 `updatedAt`을 재검증하고, 변경되면 PDF object를 삭제한 뒤 재생성을 요구한다.
+- case/card/share payload의 사용자 API 응답에서 내부 session/user/file/snapshot 식별자를 추가로 제거했다.
+
+추가 검증:
+
+- `pnpm lint`: 통과
+- `pnpm test`: 통과 — 8 files, 21 tests
+- `rm -rf .next && pnpm build`: 통과 — 29 static pages
 - `pnpm e2e`: 통과 — happy path 1 passed, live-provider skipped
 - `pnpm e2e:live`: 통과 — live provider path 1 passed
 
