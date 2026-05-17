@@ -31,34 +31,65 @@ afterEach(async () => {
   if (dir) await rm(dir, { recursive: true, force: true });
 });
 
+async function createTossIntent(sessionId: string) {
+  const caseRecord = await createAnonymousCase(sessionId);
+  await updateDb((db) => {
+    db.consentRecords.push({
+      id: `consent_payment_${sessionId}`,
+      caseId: caseRecord.id,
+      consentType: 'payment',
+      version: CURRENT_CONSENT_VERSION,
+      acceptedAt: new Date().toISOString(),
+      ipHash: null,
+      userAgentHash: null
+    });
+  });
+  return createPaymentIntent(caseRecord.id);
+}
+
+function stubTossRetrieve(payment: { paymentKey: string; orderId: string; totalAmount: number; status: string }) {
+  const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => payment });
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
+}
+
 describe('Toss webhook handling', () => {
   it('verifies general payment webhooks by retrieving the payment before marking paid', async () => {
-    const caseRecord = await createAnonymousCase('session-payment-webhook');
-    await updateDb((db) => {
-      db.consentRecords.push({
-        id: 'consent_payment',
-        caseId: caseRecord.id,
-        consentType: 'payment',
-        version: CURRENT_CONSENT_VERSION,
-        acceptedAt: new Date().toISOString(),
-        ipHash: null,
-        userAgentHash: null
-      });
-    });
-    const intent = await createPaymentIntent(caseRecord.id);
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({ paymentKey: 'toss_payment_key', orderId: intent.paymentId, totalAmount: 9900, status: 'DONE' })
-      })
-    );
+    const intent = await createTossIntent('session-payment-webhook');
+    const fetchMock = stubTossRetrieve({ paymentKey: 'toss_payment_key', orderId: intent.paymentId, totalAmount: 9900, status: 'DONE' });
 
     await expect(handleTossWebhook({ eventType: 'PAYMENT_STATUS_CHANGED', data: { paymentKey: 'toss_payment_key', orderId: intent.paymentId } })).resolves.toEqual({ ok: true });
 
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.tosspayments.com/v1/payments/toss_payment_key',
+      expect.objectContaining({ headers: expect.objectContaining({ Authorization: expect.stringMatching(/^Basic /) }) })
+    );
     const db = await readDb();
     const paid = db.paymentIntents.find((item) => item.id === intent.paymentId);
     expect(paid?.status).toBe('paid');
     expect(paid?.providerPaymentKey).toBe('toss_payment_key');
+  });
+
+  it('ignores webhook bodies when the Toss retrieve result is not a completed matching payment', async () => {
+    const mismatchCases = [
+      { paymentKey: 'toss_canceled', status: 'CANCELED', orderId: 'same', totalAmount: 9900 },
+      { paymentKey: 'toss_wrong_order', status: 'DONE', orderId: 'other_order', totalAmount: 9900 },
+      { paymentKey: 'toss_wrong_amount', status: 'DONE', orderId: 'same', totalAmount: 100 }
+    ];
+
+    for (const mismatch of mismatchCases) {
+      const intent = await createTossIntent(`session-${mismatch.paymentKey}`);
+      stubTossRetrieve({ ...mismatch, orderId: mismatch.orderId === 'same' ? intent.paymentId : mismatch.orderId });
+
+      await expect(
+        handleTossWebhook({
+          eventType: 'PAYMENT_STATUS_CHANGED',
+          data: { paymentKey: mismatch.paymentKey, orderId: intent.paymentId, status: 'DONE', totalAmount: 9900 }
+        })
+      ).resolves.toEqual({ ok: true, ignored: true });
+
+      const db = await readDb();
+      expect(db.paymentIntents.find((item) => item.id === intent.paymentId)?.status).toBe('created');
+    }
   });
 });
