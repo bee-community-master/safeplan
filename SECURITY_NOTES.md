@@ -52,7 +52,7 @@
 
 ## 남은 검토 항목
 
-- Toss 결제 승인은 v2 Standard SDK redirect와 server-side confirm API로 구현했지만, 운영 키와 Toss 콘솔 webhook 설정으로 실제 결제 smoke가 필요하다.
+- Toss 결제 승인은 v2 Standard SDK current-window redirect와 server-side confirm API로 구현했지만, 운영 키와 Toss 콘솔 webhook 설정으로 실제 결제 smoke가 필요하다.
 - Prisma backend는 MVP 호환용 snapshot replace 계층을 유지한다. Cloud Run `maxScale=1`, `containerConcurrency=1`로 동시성 위험을 낮췄지만, 트래픽 증가 전 row-level repository/queue 분리가 필요하다.
 - 법률 문구는 제품 guardrail 수준이며 법률 검토 완료 상태가 아니다.
 

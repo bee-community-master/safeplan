@@ -40,7 +40,8 @@ describe('Toss standard checkout client', () => {
       orderId: 'pay_123',
       orderName: '독립 세이프플랜 자료 정리 리포트',
       successUrl: 'https://safeplan.example.com/success',
-      failUrl: 'https://safeplan.example.com/fail'
+      failUrl: 'https://safeplan.example.com/fail',
+      windowTarget: 'self'
     });
   });
 });

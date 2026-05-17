@@ -6,6 +6,7 @@ type TossStandardPayment = {
     orderName: string;
     successUrl: string;
     failUrl: string;
+    windowTarget: 'self';
   }) => Promise<void>;
 };
 
@@ -96,6 +97,7 @@ export async function requestTossStandardPayment(payment: PaymentCreateResponse[
       orderId: payment.orderId,
       orderName: payment.orderName || '독립 세이프플랜 자료 정리 리포트',
       successUrl: payment.successUrl,
-      failUrl: payment.failUrl
+      failUrl: payment.failUrl,
+      windowTarget: 'self'
     });
 }

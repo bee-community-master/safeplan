@@ -38,11 +38,11 @@ function rateLimit(request: NextRequest): NextResponse | null {
   return null;
 }
 
-function contentSecurityPolicy(): string {
+export function contentSecurityPolicy(): string {
   const scriptSrc = process.env.APP_ENV === 'production'
     ? "'self' 'unsafe-inline' https://js.tosspayments.com"
     : "'self' 'unsafe-inline' 'unsafe-eval' https://js.tosspayments.com";
-  return `default-src 'self'; script-src ${scriptSrc}; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'`;
+  return `default-src 'self'; script-src ${scriptSrc}; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://*.tosspayments.com; frame-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self' https://*.tosspayments.com`;
 }
 
 function withSecurityHeaders(response: NextResponse): NextResponse {

@@ -20,7 +20,7 @@
   - 민감정보, 원본 자료, 외부 AI/OCR/STT, 해외/제3자 처리, 결제 동의 기록
   - IP/User-Agent 해시 저장
   - 9,900원 mock payment full path
-  - Toss v2 Standard SDK redirect + server-side confirm API + webhook retrieve-verify handler
+  - Toss v2 Standard SDK current-window redirect + server-side confirm API + webhook retrieve-verify handler
 - AI pipeline
   - Mistral OCR adapter: `src/server/ai/providers/mistral-ocr.ts`
   - Groq STT adapter: `src/server/ai/providers/groq-stt.ts`
@@ -125,7 +125,7 @@ pnpm e2e:live
 - `pnpm e2e:live`: 통과 — Playwright Chromium live provider full path 1 test passed
 - 실제 외부 호출 확인: `ocr:mistral=1`, `stt:groq=1`
 - 현재 `.env.local`의 `BASETEN_CLASSIFIER_URL`이 비어 있어 Baseten classifier live call은 blocked 상태이며 classification은 mock fallback으로 검증됐다.
-- Local live E2E는 외부 AI 비용 검증에 초점을 맞춰 `PAYMENT_PROVIDER=mock`으로 유지했다. Toss 결제 redirect/confirm 구현은 운영 credential 연결 후 별도 smoke가 필요하다.
+- Local live E2E는 외부 AI 비용 검증에 초점을 맞춰 `PAYMENT_PROVIDER=mock`으로 유지했다. Toss 결제 current-window redirect/confirm 구현은 운영 credential 연결 후 별도 smoke가 필요하다.
 - 사용자 문구 정리 후에도 live E2E를 재실행해 변경된 동의/결제/자료 정리/공유/삭제 레이블로 전체 흐름이 깨지지 않음을 확인했다.
 - Production 사용자 표면 보강 후 Playwright happy path에서 비밀번호 보호 공유 링크 열기와 삭제 전 확인 UX를 함께 검증했다.
 - 디자인 컨셉과 구현 화면을 `view_image`로 확인했고, Browser/Playwright에서 desktop 1440px 및 mobile 390px 렌더링을 점검했다.
@@ -279,7 +279,7 @@ pnpm e2e:live
 ## 알려진 blocker / 운영 전 확인 필요
 
 - Baseten live classifier는 `BASETEN_CLASSIFIER_URL`이 있어야 실제 호출까지 검증 가능하다. 현재 local live E2E는 Mistral/Groq 실제 호출과 Baseten mock fallback을 확인했다.
-- Toss 실결제 redirect/승인은 구현됐지만, 운영 키와 Toss 콘솔 설정 후 실제 결제 smoke가 필요하다.
+- Toss 실결제 current-window redirect/승인은 구현됐지만, 운영 키와 Toss 콘솔 설정 후 실제 결제 smoke가 필요하다.
 - Cloud SQL/GCS/KMS/Secret Manager 리소스를 만든 뒤 `pnpm prisma:migrate`, Cloud Run 배포, `/api/health/ready` 200 확인이 필요하다.
 - Prisma backend는 MVP 호환용 snapshot replace 계층을 유지한다. Cloud Run `maxScale=1`, `containerConcurrency=1`로 동시성 위험을 낮췄지만, 트래픽 증가 전 row-level repository와 queue 분리가 필요하다.
 - 법률 문구는 guardrail 수준이며 법률 검토 완료 상태가 아니다.
@@ -287,7 +287,7 @@ pnpm e2e:live
 ## DETAILED_PLAN.md 대비 편차
 
 - MVP local/test mode는 local JSON/object store를 사용하고, production은 `SAFEPLAN_DB_BACKEND=prisma`와 `STORAGE_PROVIDER=gcs`로 전환한다.
-- Toss 실결제는 SDK redirect와 confirm API까지 구현했지만, 실제 운영 결제 smoke는 credential/콘솔 설정 후 필요하다.
+- Toss 실결제는 SDK current-window redirect와 confirm API까지 구현했지만, 실제 운영 결제 smoke는 credential/콘솔 설정 후 필요하다.
 - Optional Cloud Tasks는 사용하지 않고 local processing endpoint를 구현했다.
 - PDF 생성은 서버 내 PDF-lib 기반 smoke/report 생성으로 구현했고, 브라우저 print-to-PDF 방식은 사용하지 않았다.
 
