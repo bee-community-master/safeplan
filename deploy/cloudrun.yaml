@@ -9,10 +9,11 @@ spec:
     metadata:
       annotations:
         autoscaling.knative.dev/minScale: "0"
-        autoscaling.knative.dev/maxScale: "10"
+        autoscaling.knative.dev/maxScale: "1"
         run.googleapis.com/execution-environment: gen2
         run.googleapis.com/cloudsql-instances: ${GCP_PROJECT_ID}:asia-northeast3:safeplan-postgres
     spec:
+      containerConcurrency: 1
       serviceAccountName: safeplan-cloudrun@${GCP_PROJECT_ID}.iam.gserviceaccount.com
       containers:
         - image: asia-northeast3-docker.pkg.dev/${GCP_PROJECT_ID}/safeplan/safeplan-web:latest

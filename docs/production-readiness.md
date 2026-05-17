@@ -46,3 +46,8 @@
 - 운영자 admin UI: 원본 증거 노출 위험 때문에 MVP 범위에서 제외 유지
 - 자동 긴급 신고/상담 연결/변호사 매칭: 제품 guardrail상 제외 유지
 - 다중 인스턴스 고성능 queue: 현재는 소규모 launch용 transaction lock 기반 저장이며, 트래픽 증가 시 job queue/row-level repository로 분리 필요
+
+
+## 2026-05-17 코드리뷰 후 운영 제한
+
+현재 Prisma persistence는 MVP 호환성을 위해 `SafeplanDb` 스냅샷 교체 어댑터를 유지합니다. 동시 쓰기 손실 위험을 줄이기 위해 Cloud Run 템플릿은 임시로 `maxScale=1`, `containerConcurrency=1`로 제한합니다. 이 설정은 production 초기 검증을 위한 안전장치이며, 다음 출시 단계에서는 케이스/동의/결제/자료/공유 링크를 row-level repository transaction으로 분리해야 합니다.

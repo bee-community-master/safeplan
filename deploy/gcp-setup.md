@@ -142,3 +142,8 @@ gcloud run services update-traffic safeplan-web --region="$GCP_REGION" --to-revi
 - Toss 콘솔 success/fail URL과 webhook endpoint를 운영 도메인 기준으로 등록합니다.
 - Baseten classifier URL을 설정한 뒤 live E2E에서 `classification:baseten`을 확인합니다.
 - GCS originals/reports 객체가 private 상태로 생성/삭제되는지 확인합니다.
+
+
+### 초기 운영 동시성 제한
+
+현재 Cloud Run 템플릿은 민감자료/결제/삭제 상태의 스냅샷 교체형 DB 호환 계층을 보호하기 위해 `maxScale=1`, `containerConcurrency=1`로 시작합니다. 트래픽 확대 전 Prisma row-level repository 전환과 durable job queue 전환을 완료한 뒤 scale-out 값을 상향하세요.

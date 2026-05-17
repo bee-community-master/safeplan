@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 import { SharePasswordGate } from '@/components/SharePasswordGate';
 import { ShareReportContent } from '@/components/ShareReportContent';
-import { readDb } from '@/server/db/local-store';
 import { resolveShareToken } from '@/server/reports/report-service';
+import { buildSharedReportPayload } from '@/server/reports/share-payload';
 
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
@@ -23,10 +23,6 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
       </section>
     );
   }
-  const db = await readDb();
-  const cards = db.evidenceCards
-    .filter((card) => card.caseId === resolved.report.caseId && card.deletedAt === null && card.userConfirmed && card.includeInReport)
-    .map((card) => ({ id: card.id, title: card.title, dateCandidate: card.dateCandidate, confidenceLevel: card.confidenceLevel, summaryKo: card.summaryKo }));
-  const fileCount = db.evidenceFiles.filter((file) => file.caseId === resolved.report.caseId && file.deletedAt === null).length;
-  return <ShareReportContent cards={cards} fileCount={fileCount} />;
+  const report = await buildSharedReportPayload(resolved.report);
+  return <ShareReportContent cards={report.cards} fileCount={report.fileCount} />;
 }

@@ -1,16 +1,10 @@
 import 'server-only';
+import { ProviderMissingCredentialError } from './schema';
 
 export interface OcrInput {
   content: Buffer;
   mimeType: string;
   originalName: string;
-}
-
-export class ProviderMissingCredentialError extends Error {
-  constructor(provider: string) {
-    super(`${provider}_missing_credentials`);
-    this.name = 'ProviderMissingCredentialError';
-  }
 }
 
 export async function mistralOcr(input: OcrInput): Promise<{ markdown: string; raw: unknown }> {

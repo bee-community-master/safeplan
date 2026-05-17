@@ -1,5 +1,6 @@
 import 'server-only';
 import { cookies } from 'next/headers';
+import { isProductionApp } from '@/lib/runtime';
 import { randomToken, signValue, verifySignedValue } from '@/server/security/crypto';
 
 const COOKIE_NAME = 'safeplan_session';
@@ -13,7 +14,7 @@ function unpackSession(cookieValue: string | undefined): string | null {
   if (!cookieValue) return null;
   const [version, sessionId, signature] = cookieValue.split('.');
   if (version === COOKIE_VERSION && sessionId && signature && verifySignedValue(sessionId, signature)) return sessionId;
-  if (process.env.APP_ENV !== 'production' && cookieValue && !cookieValue.includes('.')) return cookieValue;
+  if (!isProductionApp() && cookieValue && !cookieValue.includes('.')) return cookieValue;
   return null;
 }
 

@@ -1,4 +1,5 @@
 import 'server-only';
+import { appEnvironment, isProductionApp } from '@/lib/runtime';
 import { dbBackend } from '@/server/db/local-store';
 import { storageProvider } from '@/server/files/object-store';
 
@@ -24,8 +25,8 @@ function add(checks: ReadinessCheck[], check: ReadinessCheck): void {
 }
 
 export function productionReadiness(): ReadinessReport {
-  const appEnv = process.env.APP_ENV || 'local';
-  const production = appEnv === 'production';
+  const appEnv = appEnvironment();
+  const production = isProductionApp();
   const checks: ReadinessCheck[] = [];
   const appUrl = process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || '';
   const sessionSecret = process.env.SESSION_SECRET || '';

@@ -1,5 +1,5 @@
 import 'server-only';
-import { ProviderMissingCredentialError } from './mistral-ocr';
+import { ProviderMissingCredentialError } from './schema';
 
 export interface SttInput {
   content: Buffer;

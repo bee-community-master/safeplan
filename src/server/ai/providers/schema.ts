@@ -1,6 +1,17 @@
 import { z } from 'zod';
 import { AI_TAGS, MATERIAL_TYPES } from '@/lib/constants';
 
+export class ProviderMissingCredentialError extends Error {
+  constructor(provider: string) {
+    super(`${provider}_missing_credentials`);
+    this.name = 'ProviderMissingCredentialError';
+  }
+}
+
+export function isProviderMissingCredentialError(error: unknown): error is ProviderMissingCredentialError {
+  return error instanceof ProviderMissingCredentialError;
+}
+
 const aiTagSchema = z.enum(AI_TAGS);
 const materialTypeSchema = z.enum(MATERIAL_TYPES);
 

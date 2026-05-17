@@ -13,21 +13,38 @@ export interface UploadInputFile {
   userMemo?: string | null;
 }
 
+interface PreparedUploadFile extends UploadInputFile {
+  plain: Buffer;
+  actualSizeBytes: number;
+}
+
+function prepareUploadFiles(files: UploadInputFile[]): PreparedUploadFile[] {
+  const prepared = files.map((file) => {
+    const plain = Buffer.from(file.contentBase64, 'base64');
+    return { ...file, plain, actualSizeBytes: plain.byteLength };
+  });
+  const validation = validateUploadCandidates(prepared.map(({ name, mimeType, actualSizeBytes }) => ({ name, mimeType, sizeBytes: actualSizeBytes })));
+  const declaredSizeErrors = prepared
+    .filter((file) => Number.isFinite(file.sizeBytes) && file.sizeBytes !== file.actualSizeBytes)
+    .map((file) => `${file.name}: 파일 크기 정보가 실제 업로드와 일치하지 않습니다.`);
+  const errors = [...(validation.ok ? [] : validation.errors), ...declaredSizeErrors];
+  if (errors.length) throw new Error(errors.join('\n'));
+  return prepared;
+}
+
 export async function storeEvidenceFiles(caseId: string, files: UploadInputFile[]): Promise<EvidenceFileRecord[]> {
-  const validation = validateUploadCandidates(files.map(({ name, mimeType, sizeBytes }) => ({ name, mimeType, sizeBytes })));
-  if (!validation.ok) throw new Error(validation.errors.join('\n'));
+  const preparedFiles = prepareUploadFiles(files);
   const now = new Date().toISOString();
   const records: EvidenceFileRecord[] = [];
 
-  for (const file of files) {
-    const plain = Buffer.from(file.contentBase64, 'base64');
-    const encrypted = encryptBuffer(plain);
+  for (const file of preparedFiles) {
+    const encrypted = encryptBuffer(file.plain);
     const record: EvidenceFileRecord = {
       id: id('file'),
       caseId,
       originalName: file.name,
       mimeType: file.mimeType,
-      sizeBytes: file.sizeBytes || plain.byteLength,
+      sizeBytes: file.actualSizeBytes,
       gcsBucket: process.env.GCS_BUCKET_ORIGINALS || 'local-originals',
       gcsObject: `${caseId}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9가-힣._-]/g, '_')}.enc`,
       encryptedDek: encrypted.encryptedDek,

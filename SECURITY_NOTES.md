@@ -45,5 +45,7 @@
 ## 남은 검토 항목
 
 - Toss 결제 승인은 server-side confirm API로 구현했지만, 운영 키와 Toss 콘솔 webhook 설정으로 실제 결제 smoke가 필요하다.
-- Prisma backend는 normalized table replace + advisory lock 방식의 소규모 launch 구현이다. 트래픽 증가 전 row-level repository/queue 분리가 필요하다.
+- Prisma backend는 MVP 호환용 snapshot replace 계층을 유지한다. Cloud Run `maxScale=1`, `containerConcurrency=1`로 동시성 위험을 낮췄지만, 트래픽 증가 전 row-level repository/queue 분리가 필요하다.
 - 법률 문구는 제품 guardrail 수준이며 법률 검토 완료 상태가 아니다.
+
+- Toss webhook은 `x-toss-timestamp`와 raw body 기반 HMAC-SHA256 `x-toss-signature` 검증을 통과한 요청만 처리한다.

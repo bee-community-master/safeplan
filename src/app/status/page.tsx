@@ -1,4 +1,5 @@
 import { PageHero } from '@/components/DesignSystem';
+import { isProductionApp } from '@/lib/runtime';
 import { productionReadiness } from '@/server/ops/readiness';
 
 export const dynamic = 'force-dynamic';
@@ -9,7 +10,7 @@ export const metadata = {
 
 export default function StatusPage() {
   const readiness = productionReadiness();
-  const isProduction = process.env.APP_ENV === 'production';
+  const isProduction = isProductionApp();
   const available = !isProduction || readiness.ready;
   return (
     <div className="space-y-8">

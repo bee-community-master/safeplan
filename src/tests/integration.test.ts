@@ -22,10 +22,25 @@ beforeEach(async () => {
 });
 
 describe('local happy path services', () => {
+  it('rejects uploads when declared size does not match actual decoded bytes', async () => {
+    const caseRecord = await createAnonymousCase('session-upload-size');
+    await expect(
+      storeEvidenceFiles(caseRecord.id, [
+        {
+          name: 'forged.txt',
+          mimeType: 'text/plain',
+          sizeBytes: 1,
+          contentBase64: Buffer.from('실제 업로드 내용은 더 깁니다.').toString('base64')
+        }
+      ])
+    ).rejects.toThrow('파일 크기 정보가 실제 업로드와 일치하지 않습니다.');
+  });
+
   it('gates processing by consent/payment, creates report/share, then deletes deeply', async () => {
     const caseRecord = await createAnonymousCase('session-test');
+    const sampleContent = Buffer.from('생활비를 끊겠다는 메시지와 날짜 2026-05-01');
     await storeEvidenceFiles(caseRecord.id, [
-      { name: 'sample.txt', mimeType: 'text/plain', sizeBytes: 40, contentBase64: Buffer.from('생활비를 끊겠다는 메시지와 날짜 2026-05-01').toString('base64') }
+      { name: 'sample.txt', mimeType: 'text/plain', sizeBytes: sampleContent.byteLength, contentBase64: sampleContent.toString('base64') }
     ]);
     await enqueueProcessingJob(caseRecord.id);
     await expect(processCaseTimeline(caseRecord.id)).rejects.toThrow('payment_required');

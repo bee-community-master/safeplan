@@ -1,12 +1,5 @@
 import { LEGAL_CAUTION_COPY } from '@/lib/constants';
-
-export type SharedReportCard = {
-  id: string;
-  title: string;
-  dateCandidate: string | null;
-  confidenceLevel: number;
-  summaryKo: string;
-};
+import type { SharedReportCard } from '@/lib/share';
 
 export function ShareReportContent({ cards, fileCount }: { cards: SharedReportCard[]; fileCount: number }) {
   return (

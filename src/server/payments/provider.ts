@@ -1,9 +1,10 @@
 import 'server-only';
 import { PRICE_KRW } from '@/lib/constants';
+import { isProductionApp } from '@/lib/runtime';
 import { appUrl } from '@/lib/url';
 import type { PaymentIntentRecord } from '@/server/db/types';
 import { readDb, updateDb } from '@/server/db/local-store';
-import { id } from '@/server/security/crypto';
+import { hmacSha256Hex, id, timingSafeHexEqual } from '@/server/security/crypto';
 
 export interface PaymentIntentResult {
   paymentId: string;
@@ -26,8 +27,39 @@ export interface TossConfirmInput {
   amount: number;
 }
 
+const TOSS_WEBHOOK_TOLERANCE_MS = 5 * 60 * 1000;
+
+function tossWebhookSecret(): string {
+  const secret = process.env.TOSS_WEBHOOK_SECRET;
+  if (!secret) throw new Error('toss_webhook_secret_missing');
+  return secret;
+}
+
+function parseTossSignature(signatureHeader: string | null): string[] {
+  if (!signatureHeader) return [];
+  return signatureHeader
+    .split(',')
+    .map((part) => part.trim())
+    .filter((part) => part.startsWith('v1='))
+    .map((part) => part.slice(3));
+}
+
+export function verifyTossWebhookSignature(input: { rawBody: string; signatureHeader: string | null; timestampHeader: string | null; now?: Date }): void {
+  const timestamp = Number(input.timestampHeader);
+  if (!Number.isFinite(timestamp)) throw new Error('toss_webhook_signature_invalid');
+  const nowMs = input.now?.getTime() ?? Date.now();
+  if (Math.abs(nowMs - timestamp) > TOSS_WEBHOOK_TOLERANCE_MS) throw new Error('toss_webhook_signature_invalid');
+  const expected = hmacSha256Hex(tossWebhookSecret(), `${input.timestampHeader}.${input.rawBody}`);
+  const signatures = parseTossSignature(input.signatureHeader);
+  if (!signatures.some((signature) => timingSafeHexEqual(expected, signature))) throw new Error('toss_webhook_signature_invalid');
+}
+
 export function paymentProvider(): 'mock' | 'toss' {
-  if (process.env.PAYMENT_PROVIDER === 'toss' && process.env.TOSS_CLIENT_KEY && process.env.TOSS_SECRET_KEY) return 'toss';
+  if (process.env.PAYMENT_PROVIDER === 'toss') {
+    if (process.env.TOSS_CLIENT_KEY && process.env.TOSS_SECRET_KEY) return 'toss';
+    if (isProductionApp()) throw new Error('toss_credentials_missing');
+  }
+  if (isProductionApp()) throw new Error('production_payment_provider_required');
   return 'mock';
 }
 
@@ -117,43 +149,40 @@ export async function createPaymentIntent(caseId: string): Promise<PaymentIntent
   };
 }
 
-export async function completeMockPayment(caseId: string, paymentId: string): Promise<PaymentIntentRecord> {
+async function markPaymentPaid(params: { caseId: string; paymentId: string; expectedProvider: 'mock' | 'toss'; providerPaymentKey: string }): Promise<PaymentIntentRecord> {
   const now = new Date().toISOString();
   return updateDb((db) => {
-    const payment = db.paymentIntents.find((item) => item.id === paymentId && item.caseId === caseId);
+    const payment = db.paymentIntents.find((item) => item.id === params.paymentId && item.caseId === params.caseId);
     if (!payment) throw new Error('payment_not_found');
-    if (payment.provider !== 'mock') throw new Error('mock_payment_only');
+    if (payment.provider !== params.expectedProvider) throw new Error(params.expectedProvider === 'mock' ? 'mock_payment_only' : 'toss_payment_required');
+    if (payment.amountKrw !== PRICE_KRW) throw new Error('payment_amount_mismatch');
     payment.status = 'paid';
-    payment.providerPaymentKey = `mock_${payment.id}`;
+    payment.providerPaymentKey = params.providerPaymentKey;
     payment.paidAt = now;
-    const caseRecord = db.cases.find((item) => item.id === caseId);
+    const caseRecord = db.cases.find((item) => item.id === params.caseId);
     if (caseRecord) {
       caseRecord.status = 'paid';
       caseRecord.updatedAt = now;
     }
-    db.auditEvents.push({ id: id('audit'), userId: caseRecord?.userId ?? null, caseId, type: 'payment.paid', metadataJson: { provider: 'mock', amountKrw: payment.amountKrw }, createdAt: now });
+    db.auditEvents.push({
+      id: id('audit'),
+      userId: caseRecord?.userId ?? null,
+      caseId: params.caseId,
+      type: 'payment.paid',
+      metadataJson: { provider: params.expectedProvider, amountKrw: payment.amountKrw },
+      createdAt: now
+    });
     return payment;
   });
 }
 
+export async function completeMockPayment(caseId: string, paymentId: string): Promise<PaymentIntentRecord> {
+  if (isProductionApp()) throw new Error('production_payment_provider_required');
+  return markPaymentPaid({ caseId, paymentId, expectedProvider: 'mock', providerPaymentKey: `mock_${paymentId}` });
+}
+
 async function markTossPaid(caseId: string, paymentId: string, paymentKey: string): Promise<PaymentIntentRecord> {
-  const now = new Date().toISOString();
-  return updateDb((db) => {
-    const payment = db.paymentIntents.find((item) => item.id === paymentId && item.caseId === caseId);
-    if (!payment) throw new Error('payment_not_found');
-    if (payment.provider !== 'toss') throw new Error('toss_payment_required');
-    if (payment.amountKrw !== PRICE_KRW) throw new Error('payment_amount_mismatch');
-    payment.status = 'paid';
-    payment.providerPaymentKey = paymentKey;
-    payment.paidAt = now;
-    const caseRecord = db.cases.find((item) => item.id === caseId);
-    if (caseRecord) {
-      caseRecord.status = 'paid';
-      caseRecord.updatedAt = now;
-    }
-    db.auditEvents.push({ id: id('audit'), userId: caseRecord?.userId ?? null, caseId, type: 'payment.paid', metadataJson: { provider: 'toss', amountKrw: payment.amountKrw }, createdAt: now });
-    return payment;
-  });
+  return markPaymentPaid({ caseId, paymentId, expectedProvider: 'toss', providerPaymentKey: paymentKey });
 }
 
 export async function confirmTossPayment(input: TossConfirmInput): Promise<PaymentIntentRecord> {

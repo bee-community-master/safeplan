@@ -1,5 +1,6 @@
 import 'server-only';
 import { AI_TAGS } from '@/lib/constants';
+import { isRealAiProviderMode } from '@/lib/runtime';
 import type { BasetenClassifierResponse } from '@/lib/types';
 import type { EvidenceFileRecord, ProcessingJobRecord } from '@/server/db/types';
 import { readDb, updateDb } from '@/server/db/local-store';
@@ -7,11 +8,13 @@ import { readEvidencePlain } from '@/server/files/local';
 import { id } from '@/server/security/crypto';
 import { basetenClassify } from './providers/baseten-classifier';
 import { groqStt } from './providers/groq-stt';
-import { mistralOcr, ProviderMissingCredentialError } from './providers/mistral-ocr';
+import { mistralOcr } from './providers/mistral-ocr';
 import { mockClassify, mockOcr, mockStt } from './providers/mock';
+import { isProviderMissingCredentialError } from './providers/schema';
 
-function providerMode(): 'mock' | 'real' {
-  return process.env.AI_PROVIDER_MODE === 'real' ? 'real' : 'mock';
+function warnProviderDegraded(provider: 'baseten' | 'groq' | 'mistral', error: unknown): void {
+  if (isProviderMissingCredentialError(error)) return;
+  console.warn('safeplan provider degraded', { provider, category: error instanceof Error ? error.message : String(error) });
 }
 
 function hasRequiredConsents(caseId: string, db: Awaited<ReturnType<typeof readDb>>): boolean {
@@ -24,16 +27,16 @@ function isPaid(caseId: string, db: Awaited<ReturnType<typeof readDb>>): boolean
 }
 
 async function classifyWithFallback(input: Parameters<typeof mockClassify>[0]): Promise<{ result: BasetenClassifierResponse; provider: 'baseten' | 'mock'; degraded: boolean; raw: unknown }> {
-  if (providerMode() === 'real') {
+  if (isRealAiProviderMode()) {
     try {
       const result = await basetenClassify(input);
       return { result, provider: 'baseten', degraded: false, raw: result };
     } catch (error) {
-      if (!(error instanceof ProviderMissingCredentialError)) console.warn('safeplan provider degraded', { provider: 'baseten', category: (error as Error).message });
+      warnProviderDegraded('baseten', error);
     }
   }
   const result = await mockClassify(input);
-  return { result, provider: 'mock', degraded: providerMode() === 'real', raw: result };
+  return { result, provider: 'mock', degraded: isRealAiProviderMode(), raw: result };
 }
 
 async function extractText(file: EvidenceFileRecord): Promise<{ ocrMarkdown: string | null; transcript: string | null; degraded: boolean; extractionRaw: Array<{ provider: 'mistral' | 'groq' | 'mock'; kind: 'ocr' | 'stt'; raw: unknown; text: string }> }> {
@@ -43,27 +46,27 @@ async function extractText(file: EvidenceFileRecord): Promise<{ ocrMarkdown: str
     return { ocrMarkdown: text, transcript: null, degraded: false, extractionRaw: [{ provider: 'mock', kind: 'ocr', raw: { textMode: true }, text }] };
   }
   if (file.mimeType.startsWith('audio/')) {
-    if (providerMode() === 'real') {
+    if (isRealAiProviderMode()) {
       try {
         const result = await groqStt({ content, mimeType: file.mimeType, originalName: file.originalName });
         return { ocrMarkdown: null, transcript: result.transcript, degraded: false, extractionRaw: [{ provider: 'groq', kind: 'stt', raw: result.raw, text: result.transcript }] };
       } catch (error) {
-        if (!(error instanceof ProviderMissingCredentialError)) console.warn('safeplan provider degraded', { provider: 'groq', category: (error as Error).message });
+        warnProviderDegraded('groq', error);
       }
     }
     const mock = await mockStt({ originalName: file.originalName });
-    return { ocrMarkdown: null, transcript: mock.transcript, degraded: providerMode() === 'real', extractionRaw: [{ provider: 'mock', kind: 'stt', raw: mock.raw, text: mock.transcript }] };
+    return { ocrMarkdown: null, transcript: mock.transcript, degraded: isRealAiProviderMode(), extractionRaw: [{ provider: 'mock', kind: 'stt', raw: mock.raw, text: mock.transcript }] };
   }
-  if (providerMode() === 'real') {
+  if (isRealAiProviderMode()) {
     try {
       const result = await mistralOcr({ content, mimeType: file.mimeType, originalName: file.originalName });
       return { ocrMarkdown: result.markdown, transcript: null, degraded: false, extractionRaw: [{ provider: 'mistral', kind: 'ocr', raw: result.raw, text: result.markdown }] };
     } catch (error) {
-      if (!(error instanceof ProviderMissingCredentialError)) console.warn('safeplan provider degraded', { provider: 'mistral', category: (error as Error).message });
+      warnProviderDegraded('mistral', error);
     }
   }
   const mock = await mockOcr({ content, mimeType: file.mimeType, originalName: file.originalName });
-  return { ocrMarkdown: mock.markdown, transcript: null, degraded: providerMode() === 'real', extractionRaw: [{ provider: 'mock', kind: 'ocr', raw: mock.raw, text: mock.markdown }] };
+  return { ocrMarkdown: mock.markdown, transcript: null, degraded: isRealAiProviderMode(), extractionRaw: [{ provider: 'mock', kind: 'ocr', raw: mock.raw, text: mock.markdown }] };
 }
 
 export async function enqueueProcessingJob(caseId: string): Promise<ProcessingJobRecord> {

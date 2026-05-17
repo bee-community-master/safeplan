@@ -92,7 +92,7 @@ docker build -t safeplan:production-design .
 결과:
 
 - `pnpm lint`: 통과 (`next lint` no errors + `tsc --noEmit` 통과)
-- `pnpm test`: 통과 — 6 files, 11 tests
+- `pnpm test`: 통과 — 8 files, 14 tests
 - `pnpm build`: 통과 — Next.js 15.5.18 production build, 29 static pages generated
 - `pnpm e2e`: 통과 — Playwright Chromium happy path 1 passed, live-provider spec 1 skipped
 - `pnpm e2e:live`: 통과 — Playwright Chromium live provider full path 1 passed
@@ -129,6 +129,30 @@ pnpm e2e:live
 - 사용자 문구 정리 후에도 live E2E를 재실행해 변경된 동의/결제/자료 정리/공유/삭제 레이블로 전체 흐름이 깨지지 않음을 확인했다.
 - Production 사용자 표면 보강 후 Playwright happy path에서 비밀번호 보호 공유 링크 열기와 삭제 전 확인 UX를 함께 검증했다.
 - 디자인 컨셉과 구현 화면을 `view_image`로 확인했고, Browser/Playwright에서 desktop 1440px 및 mobile 390px 렌더링을 점검했다.
+
+
+
+## 2026-05-17 code-review refactor update
+
+`$code-review` 병렬 리뷰 결과 주요 HIGH/MEDIUM 이슈를 반영했다.
+
+- 업로드 저장은 client가 보낸 `sizeBytes`가 아니라 실제 base64 decode byte 길이로 검증·저장한다.
+- Toss webhook은 `x-toss-timestamp` + raw body HMAC(`x-toss-signature`, `v1=`) 검증을 통과한 요청만 처리한다.
+- Evidence upload client를 동의 체크리스트와 client helper로 분리하고, 지원 MIME 타입은 공통 상수에서 사용한다.
+- 공유 리포트 payload 생성 로직을 단일 server service로 통합했다.
+- Review card client는 persistence record 대신 explicit DTO를 사용한다.
+- provider missing-credential error를 vendor별 adapter가 아닌 provider schema contract로 이동했다.
+- PDF 섹션 heading을 요구사항의 11개 섹션으로 고정하고 테스트를 추가했다.
+- production CSP에서 `unsafe-eval`을 제거하고 dev/local에만 허용했다.
+- Cloud Run은 스냅샷 DB 호환 계층이 남아 있는 동안 `maxScale=1`, `containerConcurrency=1`로 제한한다.
+
+추가 검증:
+
+- `pnpm lint`: 통과
+- `pnpm test`: 통과 — 8 files, 14 tests
+- `pnpm build`: 통과 — 29 static pages
+- `pnpm e2e`: 통과 — happy path 1 passed, live-provider skipped
+- `pnpm e2e:live`: 통과 — Mistral OCR/Groq STT live path 1 passed
 
 ## Provider mode
 
@@ -199,7 +223,7 @@ pnpm e2e:live
 - Baseten live classifier는 `BASETEN_CLASSIFIER_URL`이 있어야 실제 호출까지 검증 가능하다. 현재 local live E2E는 Mistral/Groq 실제 호출과 Baseten mock fallback을 확인했다.
 - Toss 실결제 redirect/승인은 구현됐지만, 운영 키와 Toss 콘솔 설정 후 실제 결제 smoke가 필요하다.
 - Cloud SQL/GCS/KMS/Secret Manager 리소스를 만든 뒤 `pnpm prisma:migrate`, Cloud Run 배포, `/api/health/ready` 200 확인이 필요하다.
-- Prisma backend는 normalized table replace + advisory lock 방식의 소규모 launch 구현이다. 트래픽 증가 전 row-level repository와 queue 분리가 필요하다.
+- Prisma backend는 MVP 호환용 snapshot replace 계층을 유지한다. Cloud Run `maxScale=1`, `containerConcurrency=1`로 동시성 위험을 낮췄지만, 트래픽 증가 전 row-level repository와 queue 분리가 필요하다.
 - 법률 문구는 guardrail 수준이며 법률 검토 완료 상태가 아니다.
 
 ## DETAILED_PLAN.md 대비 편차

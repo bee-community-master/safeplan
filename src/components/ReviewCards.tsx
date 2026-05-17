@@ -2,27 +2,27 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import type { EvidenceCardReviewDto, EvidenceCardReviewPatch } from '@/lib/evidence-card-dto';
 import { confidencePolicyLabel } from '@/lib/evidence';
-import type { EvidenceCardRecord } from '@/server/db/types';
 
 export function ReviewCards({ caseId }: { caseId: string }) {
   const router = useRouter();
-  const [cards, setCards] = useState<EvidenceCardRecord[]>([]);
+  const [cards, setCards] = useState<EvidenceCardReviewDto[]>([]);
   const [message, setMessage] = useState('');
 
   useEffect(() => {
     fetch(`/api/evidence/${caseId}/cards`).then((response) => response.json()).then((data) => setCards(data.cards || []));
   }, [caseId]);
 
-  function updateLocal(cardId: string, patch: Partial<EvidenceCardRecord>) {
+  function updateLocal(cardId: string, patch: Partial<EvidenceCardReviewDto>) {
     setCards((prev) => prev.map((card) => (card.id === cardId ? { ...card, ...patch } : card)));
   }
 
-  async function save(card: EvidenceCardRecord) {
+  async function save(card: EvidenceCardReviewDto) {
     const response = await fetch(`/api/evidence/cards/${card.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: card.title, summaryKo: card.summaryKo, userMemo: card.userMemo, includeInReport: card.includeInReport, userConfirmed: card.userConfirmed, dateCandidate: card.dateCandidate })
+      body: JSON.stringify({ title: card.title, summaryKo: card.summaryKo, userMemo: card.userMemo, includeInReport: card.includeInReport, userConfirmed: card.userConfirmed, dateCandidate: card.dateCandidate } satisfies EvidenceCardReviewPatch)
     });
     if (!response.ok) setMessage((await response.json()).error || '저장 실패');
     else setMessage('사용자 확인 사항을 저장했습니다.');

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { assertOwnsCase } from '@/server/auth/ownership';
-import { updateDb } from '@/server/db/local-store';
+import { readDb, updateDb } from '@/server/db/local-store';
 import { jsonError, jsonOk } from '@/server/http';
 import { id } from '@/server/security/crypto';
 
@@ -17,10 +17,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ca
   try {
     const { cardId } = await params;
     const body = schema.parse(await request.json());
-    const card = await updateDb(async (db) => {
+    const dbBefore = await readDb();
+    const existing = dbBefore.evidenceCards.find((item) => item.id === cardId && item.deletedAt === null);
+    if (!existing) throw new Error('card_not_found');
+    await assertOwnsCase(existing.caseId);
+    const card = await updateDb((db) => {
       const record = db.evidenceCards.find((item) => item.id === cardId && item.deletedAt === null);
       if (!record) throw new Error('card_not_found');
-      await assertOwnsCase(record.caseId);
       Object.assign(record, body, { updatedAt: new Date().toISOString() });
       db.auditEvents.push({ id: id('audit'), userId: db.cases.find((item) => item.id === record.caseId)?.userId ?? null, caseId: record.caseId, type: 'card.updated', metadataJson: { cardId: record.id, includeInReport: record.includeInReport, userConfirmed: record.userConfirmed }, createdAt: record.updatedAt });
       return record;

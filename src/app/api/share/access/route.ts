@@ -1,6 +1,6 @@
 import { jsonError, jsonOk } from '@/server/http';
-import { readDb } from '@/server/db/local-store';
 import { resolveShareToken } from '@/server/reports/report-service';
+import { buildSharedReportPayload } from '@/server/reports/share-payload';
 
 export async function POST(request: Request) {
   try {
@@ -13,18 +13,7 @@ export async function POST(request: Request) {
     if (resolved.status === 'expired') return jsonError(new Error('share_expired'), 410);
     if (resolved.status !== 'ok') return jsonError(new Error('share_not_found'), 404);
 
-    const db = await readDb();
-    const cards = db.evidenceCards
-      .filter((card) => card.caseId === resolved.report.caseId && card.deletedAt === null && card.userConfirmed && card.includeInReport)
-      .map((card) => ({
-        id: card.id,
-        title: card.title,
-        dateCandidate: card.dateCandidate,
-        confidenceLevel: card.confidenceLevel,
-        summaryKo: card.summaryKo
-      }));
-    const fileCount = db.evidenceFiles.filter((file) => file.caseId === resolved.report.caseId && file.deletedAt === null).length;
-    return jsonOk({ report: { cards, fileCount } });
+    return jsonOk({ report: await buildSharedReportPayload(resolved.report) });
   } catch (error) {
     return jsonError(error, 400);
   }

@@ -1,7 +1,6 @@
 import 'server-only';
 import type { BasetenClassifierInput, BasetenClassifierResponse } from '@/lib/types';
-import { ProviderMissingCredentialError } from './mistral-ocr';
-import { basetenResponseSchema } from './schema';
+import { basetenResponseSchema, ProviderMissingCredentialError } from './schema';
 
 export async function basetenClassify(input: BasetenClassifierInput): Promise<BasetenClassifierResponse> {
   const apiKey = process.env.BASETEN_API_KEY;

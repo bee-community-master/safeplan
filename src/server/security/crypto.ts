@@ -1,5 +1,6 @@
 import 'server-only';
 import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypto';
+import { isProductionApp } from '@/lib/runtime';
 
 export function id(prefix: string): string {
   return `${prefix}_${randomUUID()}`;
@@ -28,6 +29,17 @@ export function randomToken(bytes = 32): string {
   return randomBytes(bytes).toString('base64url');
 }
 
+
+export function hmacSha256Hex(secret: string, value: string): string {
+  return createHmac('sha256', secret).update(value).digest('hex');
+}
+
+export function timingSafeHexEqual(expectedHex: string, actualHex: string): boolean {
+  const expected = Buffer.from(expectedHex, 'hex');
+  const actual = Buffer.from(actualHex, 'hex');
+  return expected.length === actual.length && timingSafeEqual(expected, actual);
+}
+
 function masterKey(): Buffer {
   const configured = process.env.ENVELOPE_MASTER_KEY_BASE64;
   if (configured) {
@@ -35,7 +47,7 @@ function masterKey(): Buffer {
     if (key.byteLength !== 32) throw new Error('envelope_master_key_invalid');
     return key;
   }
-  if (process.env.APP_ENV === 'production') throw new Error('envelope_master_key_missing');
+  if (isProductionApp()) throw new Error('envelope_master_key_missing');
   const material = process.env.SESSION_SECRET || 'safeplan-local-dev-master-key-change-me';
   return createHash('sha256').update(material).digest();
 }

@@ -38,15 +38,19 @@ function rateLimit(request: NextRequest): NextResponse | null {
   return null;
 }
 
+function contentSecurityPolicy(): string {
+  const scriptSrc = process.env.APP_ENV === 'production'
+    ? "'self' 'unsafe-inline' https://js.tosspayments.com"
+    : "'self' 'unsafe-inline' 'unsafe-eval' https://js.tosspayments.com";
+  return `default-src 'self'; script-src ${scriptSrc}; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'`;
+}
+
 function withSecurityHeaders(response: NextResponse): NextResponse {
   response.headers.set('X-Content-Type-Options', 'nosniff');
   response.headers.set('X-Frame-Options', 'DENY');
   response.headers.set('Referrer-Policy', 'no-referrer');
   response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
-  response.headers.set(
-    'Content-Security-Policy',
-    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.tosspayments.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
-  );
+  response.headers.set('Content-Security-Policy', contentSecurityPolicy());
   return response;
 }
 

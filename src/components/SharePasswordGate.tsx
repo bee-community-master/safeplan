@@ -2,12 +2,8 @@
 
 import { useState } from 'react';
 import { BrandMark } from './DesignSystem';
-import { ShareReportContent, type SharedReportCard } from './ShareReportContent';
-
-type SharedReportPayload = {
-  cards: SharedReportCard[];
-  fileCount: number;
-};
+import type { SharedReportPayload } from '@/lib/share';
+import { ShareReportContent } from './ShareReportContent';
 
 export function SharePasswordGate({ token }: { token: string }) {
   const [password, setPassword] = useState('');

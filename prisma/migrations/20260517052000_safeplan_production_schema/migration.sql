@@ -236,4 +236,3 @@ ALTER TABLE "safeplan_share_link" ADD CONSTRAINT "safeplan_share_link_reportId_f
 
 -- AddForeignKey
 ALTER TABLE "safeplan_processing_job" ADD CONSTRAINT "safeplan_processing_job_caseId_fkey" FOREIGN KEY ("caseId") REFERENCES "safeplan_case"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-

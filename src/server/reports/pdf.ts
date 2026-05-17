@@ -56,6 +56,20 @@ function wrapText(text: string, width = 58): string[] {
   return lines;
 }
 
+export const PDF_SECTION_HEADINGS = [
+  '1. 표지',
+  '2. 법률 자문 아님 고지',
+  '3. 요약',
+  '4. 자료 수, 기간, 주요 태그, confidence 분포',
+  '5. 자료 타임라인',
+  '6. 음성 전사',
+  '7. 카카오톡/문자 구조화',
+  '8. 문서/계좌/진단서 추출 텍스트',
+  '9. 확인 필요 자료',
+  '10. 원본 파일 목록',
+  '11. 주의 문구'
+] as const;
+
 export async function generateReportPdf(input: { caseRecord: CaseRecord; cards: EvidenceCardRecord[]; files: EvidenceFileRecord[] }): Promise<Buffer> {
   const doc = await PDFDocument.create();
   const font = await loadKoreanFont(doc);
@@ -75,27 +89,33 @@ export async function generateReportPdf(input: { caseRecord: CaseRecord; cards: 
 
   draw('독립 세이프플랜 자료 정리 리포트', 20, rgb(0.16, 0.26, 0.22));
   draw(`생성일: ${new Date().toLocaleString('ko-KR')}`);
-  draw('1. 표지');
-  draw('2. 법률 자문 아님 고지');
+  draw(PDF_SECTION_HEADINGS[0]);
+  draw(PDF_SECTION_HEADINGS[1], 15);
   draw(LEGAL_CAUTION_COPY);
-  draw('3. 요약', 15);
+  draw(PDF_SECTION_HEADINGS[2], 15);
+  draw('사용자가 확인하고 리포트 포함을 선택한 자료만 정리했습니다. 모든 자동 정리 결과는 초안입니다.');
+  draw(PDF_SECTION_HEADINGS[3], 15);
   draw(`자료 수: ${input.cards.length}개 / 원본 파일: ${input.files.length}개`);
   const tags = input.cards.flatMap((card) => (Array.isArray(card.tagsJson) ? card.tagsJson : []) as Array<{ tag?: string }>).map((tag) => tag.tag).filter(Boolean);
   draw(`주요 태그: ${tags.join(', ') || '검토 필요'}`);
-  draw(`추출 신뢰도 분포: ${[1, 2, 3, 4, 5].map((level) => `${level}:${input.cards.filter((card) => card.confidenceLevel === level).length}`).join(' / ')}`);
-  draw('4. 자료 타임라인', 15);
+  draw(`confidence 분포: ${[1, 2, 3, 4, 5].map((level) => `${level}:${input.cards.filter((card) => card.confidenceLevel === level).length}`).join(' / ')}`);
+  draw(PDF_SECTION_HEADINGS[4], 15);
   for (const card of input.cards) {
     draw(`- ${card.dateCandidate || '날짜 미상'} | ${card.title} | 추출 신뢰도 ${card.confidenceLevel}단계`);
     draw(card.summaryKo);
     if (card.userMemo) draw(`사용자 메모: ${card.userMemo}`);
   }
-  draw('5. 음성 전사 / 6. 카카오톡·문자 구조화 / 7. 문서·계좌·진단서 추출 텍스트', 15);
-  draw('이 섹션은 사용자가 확인한 자료 카드의 초안 텍스트를 기준으로 구성됩니다. 원본 자료 취득 경위와 제출 가능성은 별도 법률 검토가 필요합니다.');
-  draw('8. 확인 필요 자료', 15);
+  draw(PDF_SECTION_HEADINGS[5], 15);
+  draw('음성 자료가 있는 경우 사용자가 확인한 전사 초안을 자료 카드 기준으로 검토하세요.');
+  draw(PDF_SECTION_HEADINGS[6], 15);
+  draw('카카오톡/문자 구조화는 자료 카드의 날짜, 인물, 요약 초안을 기준으로 하며 법적 판단을 포함하지 않습니다.');
+  draw(PDF_SECTION_HEADINGS[7], 15);
+  draw('문서, 계좌, 진단서 추출 텍스트는 자동 정리 초안입니다. 원본과 대조해 확인하세요.');
+  draw(PDF_SECTION_HEADINGS[8], 15);
   for (const card of input.cards.filter((item) => item.confidenceLevel <= 3)) draw(`- ${card.title}: 사용자의 추가 확인 필요`);
-  draw('9. 원본 파일 목록', 15);
+  draw(PDF_SECTION_HEADINGS[9], 15);
   for (const file of input.files) draw(`- ${file.originalName} (${displayFileType(file.mimeType)}, ${formatBytes(file.sizeBytes)})`);
-  draw('10. 주의 문구', 15);
+  draw(PDF_SECTION_HEADINGS[10], 15);
   draw(LEGAL_CAUTION_COPY);
 
   const bytes = await doc.save();

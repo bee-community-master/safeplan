@@ -2,63 +2,47 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { LEGAL_CAUTION_COPY, PRICE_KRW } from '@/lib/constants';
+import { LEGAL_CAUTION_COPY, SUPPORTED_MIME_TYPES } from '@/lib/constants';
+import { validateUploadCandidates } from '@/lib/evidence';
+import { EvidenceConsentChecklist, INITIAL_CONSENTS, type ConsentState } from './EvidenceConsentChecklist';
+import { expectJson, friendlyClientError, loadTossPayments, uploadPayload, type PaymentCreateResponse } from './evidence-upload-client';
 
 type Stage = 'idle' | 'uploaded' | 'consented' | 'paid' | 'processed';
-type TossPaymentClient = { requestPayment: (method: string, options: Record<string, unknown>) => Promise<void> };
-
-declare global {
-  interface Window {
-    TossPayments?: (clientKey: string) => TossPaymentClient;
-  }
-}
-
-
-function friendlyClientError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
-  if (/sdk|toss|payment_config|confirm|failed|_/.test(message)) return '결제 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.';
-  return message;
-}
-
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
-}
-
-function loadTossPayments(): Promise<void> {
-  if (window.TossPayments) return Promise.resolve();
-  return new Promise((resolve, reject) => {
-    const existing = document.querySelector<HTMLScriptElement>('script[data-safeplan-toss="true"]');
-    if (existing) {
-      existing.addEventListener('load', () => resolve(), { once: true });
-      existing.addEventListener('error', () => reject(new Error('toss_sdk_load_failed')), { once: true });
-      return;
-    }
-    const script = document.createElement('script');
-    script.src = 'https://js.tosspayments.com/v1/payment';
-    script.async = true;
-    script.dataset.safeplanToss = 'true';
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error('toss_sdk_load_failed'));
-    document.head.appendChild(script);
-  });
-}
-
 export function EvidenceUploadFlow({ caseId }: { caseId: string }) {
   const router = useRouter();
   const [files, setFiles] = useState<FileList | null>(null);
   const [stage, setStage] = useState<Stage>('idle');
   const [message, setMessage] = useState('');
   const [paymentId, setPaymentId] = useState<string | null>(null);
-  const [consents, setConsents] = useState({ sensitive: false, original: false, ai: false, overseas: false, payment: false });
+  const [consents, setConsents] = useState<ConsentState>(INITIAL_CONSENTS);
   const confirmationStarted = useRef(false);
   const allConsents = Object.values(consents).every(Boolean);
 
   useEffect(() => {
+    async function confirmReturnedTossPayment(params: URLSearchParams) {
+      const paymentKey = params.get('paymentKey');
+      const orderId = params.get('orderId');
+      const amount = Number(params.get('amount'));
+      const returnedPaymentId = params.get('paymentId') || orderId;
+      if (!paymentKey || !orderId || !returnedPaymentId || !amount) {
+        setMessage('결제 승인 정보가 부족합니다. 다시 시도하세요.');
+        return;
+      }
+      confirmationStarted.current = true;
+      await run(async () => {
+        const response = await fetch('/api/payments/toss-confirm', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ caseId, paymentId: returnedPaymentId, paymentKey, orderId, amount })
+        });
+        await expectJson(response, 'toss_confirm_failed');
+        setPaymentId(returnedPaymentId);
+        setStage('paid');
+        setMessage('결제가 승인되었습니다. 이제 자료 정리를 시작할 수 있습니다.');
+        window.history.replaceState(null, '', window.location.pathname);
+      });
+    }
+
     if (confirmationStarted.current || typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
     if (params.get('payment') === 'failed') {
@@ -66,48 +50,20 @@ export function EvidenceUploadFlow({ caseId }: { caseId: string }) {
       return;
     }
     if (params.get('payment') !== 'success') return;
-    const paymentKey = params.get('paymentKey');
-    const orderId = params.get('orderId');
-    const amount = Number(params.get('amount'));
-    const returnedPaymentId = params.get('paymentId') || orderId;
-    if (!paymentKey || !orderId || !returnedPaymentId || !amount) {
-      setMessage('결제 승인 정보가 부족합니다. 다시 시도하세요.');
-      return;
-    }
-    confirmationStarted.current = true;
-    void run(async () => {
-      const response = await fetch('/api/payments/toss-confirm', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ caseId, paymentId: returnedPaymentId, paymentKey, orderId, amount })
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'toss_confirm_failed');
-      setPaymentId(returnedPaymentId);
-      setStage('paid');
-      setMessage('결제가 승인되었습니다. 이제 자료 정리를 시작할 수 있습니다.');
-      window.history.replaceState(null, '', window.location.pathname);
-    });
+    void confirmReturnedTossPayment(params);
   }, [caseId]);
 
   async function upload() {
     if (!files?.length) return setMessage('업로드할 파일을 선택하세요.');
+    const validation = validateUploadCandidates(Array.from(files).map((file) => ({ name: file.name, mimeType: file.type || 'text/plain', sizeBytes: file.size })));
+    if (!validation.ok) return setMessage(validation.errors.join('\n'));
     setMessage('암호화 저장 중…');
-    const payload = await Promise.all(
-      Array.from(files).map(async (file) => ({
-        name: file.name,
-        mimeType: file.type || 'text/plain',
-        sizeBytes: file.size,
-        contentBase64: await fileToBase64(file),
-        userMemo: ''
-      }))
-    );
     const response = await fetch('/api/uploads/complete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ caseId, files: payload })
+      body: JSON.stringify({ caseId, files: await uploadPayload(files) })
     });
-    if (!response.ok) throw new Error((await response.json()).error || 'upload_failed');
+    await expectJson(response, 'upload_failed');
     setStage('uploaded');
     setMessage('업로드가 완료되었습니다. 결제 전 자료 부족 가능성을 확인하세요.');
   }
@@ -118,38 +74,18 @@ export function EvidenceUploadFlow({ caseId }: { caseId: string }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ caseId, consentTypes: ['sensitive_data', 'original_evidence', 'ai_processing', 'overseas_transfer', 'payment'] })
     });
-    if (!response.ok) throw new Error((await response.json()).error || 'consent_failed');
+    await expectJson(response, 'consent_failed');
     setStage('consented');
     setMessage('동의가 안전하게 저장되었습니다. 이제 결제를 진행할 수 있습니다.');
   }
 
   async function pay() {
     const create = await fetch('/api/payments/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ caseId }) });
-    const created = await create.json();
-    if (!create.ok) throw new Error(created.error || 'payment_create_failed');
-    const payment = created.payment as {
-      paymentId: string;
-      provider: 'mock' | 'toss';
-      clientKey?: string;
-      orderId?: string;
-      orderName?: string;
-      amountKrw: number;
-      successUrl?: string;
-      failUrl?: string;
-    };
+    const { payment } = await expectJson<PaymentCreateResponse & { error?: string }>(create, 'payment_create_failed');
     setPaymentId(payment.paymentId);
 
     if (payment.provider === 'toss') {
-      if (!payment.clientKey || !payment.orderId || !payment.successUrl || !payment.failUrl) throw new Error('결제 준비가 완료되지 않았습니다. 잠시 후 다시 시도해 주세요.');
-      await loadTossPayments();
-      if (!window.TossPayments) throw new Error('결제창을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.');
-      await window.TossPayments(payment.clientKey).requestPayment('카드', {
-        amount: payment.amountKrw,
-        orderId: payment.orderId,
-        orderName: payment.orderName || '독립 세이프플랜 자료 정리 리포트',
-        successUrl: payment.successUrl,
-        failUrl: payment.failUrl
-      });
+      await requestTossPayment(payment);
       return;
     }
 
@@ -158,16 +94,28 @@ export function EvidenceUploadFlow({ caseId }: { caseId: string }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ caseId, paymentId: payment.paymentId })
     });
-    if (!complete.ok) throw new Error((await complete.json()).error || 'payment_failed');
+    await expectJson(complete, 'payment_failed');
     setStage('paid');
     setMessage('결제가 완료되었습니다. 이제 자료 정리를 시작할 수 있습니다.');
   }
 
-  async function process() {
+  async function requestTossPayment(payment: PaymentCreateResponse['payment']) {
+    if (!payment.clientKey || !payment.orderId || !payment.successUrl || !payment.failUrl) throw new Error('결제 준비가 완료되지 않았습니다. 잠시 후 다시 시도해 주세요.');
+    await loadTossPayments();
+    if (!window.TossPayments) throw new Error('결제창을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.');
+    await window.TossPayments(payment.clientKey).requestPayment('카드', {
+      amount: payment.amountKrw,
+      orderId: payment.orderId,
+      orderName: payment.orderName || '독립 세이프플랜 자료 정리 리포트',
+      successUrl: payment.successUrl,
+      failUrl: payment.failUrl
+    });
+  }
+
+  async function processEvidence() {
     await fetch('/api/jobs/enqueue', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ caseId }) });
     const response = await fetch('/api/jobs/process', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ caseId }) });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'process_failed');
+    const data = await expectJson<{ cardCount: number; providerDegraded?: boolean; error?: string }>(response, 'process_failed');
     setStage('processed');
     setMessage(`자료 카드 ${data.cardCount}개가 준비되었습니다.${data.providerDegraded ? ' 일부 자료는 자동 정리가 완전하지 않아 확인이 필요합니다.' : ''}`);
     router.push(`/evidence/${caseId}/review`);
@@ -188,32 +136,23 @@ export function EvidenceUploadFlow({ caseId }: { caseId: string }) {
       <div className="mt-5 rounded-3xl border border-amber-200 bg-amber-50 p-5 leading-7 text-amber-950">자료 부족 시 리포트 품질이 낮을 수 있습니다. 결제 전 파일 수, 날짜, 출처 메모를 확인하세요.</div>
       <label className="mt-6 block font-semibold">
         증거 정리 자료 선택
-        <input data-testid="file-input" className="field-input" type="file" multiple accept="image/jpeg,image/png,image/webp,application/pdf,text/plain,audio/mpeg,audio/mp4,audio/wav,audio/flac,audio/webm" onChange={(event) => setFiles(event.currentTarget.files)} />
+        <input data-testid="file-input" className="field-input" type="file" multiple accept={SUPPORTED_MIME_TYPES.join(',')} onChange={(event) => setFiles(event.currentTarget.files)} />
       </label>
       <button className="button-primary mt-4" onClick={() => run(upload)}>암호화 업로드 완료</button>
 
-      <fieldset className="mt-8 space-y-3 rounded-3xl border border-line bg-white/80 p-5">
-        <legend className="px-2 font-bold">자료 정리 전 명시 동의</legend>
-        {[
-          ['sensitive', '민감정보 처리에 동의합니다.'],
-          ['original', '원본 자료 처리에 동의합니다.'],
-          ['ai', '자료 정리를 위한 외부 분석 서비스 처리에 동의합니다.'],
-          ['overseas', '가능한 해외/제3자 처리에 동의합니다.'],
-          ['payment', `${PRICE_KRW.toLocaleString('ko-KR')}원 결제에 동의합니다.`]
-        ].map(([key, label]) => (
-          <label key={key} className="flex gap-3 text-sm">
-            <input type="checkbox" checked={consents[key as keyof typeof consents]} onChange={(event) => { const checked = event.currentTarget.checked; setConsents((prev) => ({ ...prev, [key]: checked })); }} /> {label}
-          </label>
-        ))}
-        <button className="button-secondary px-4 py-2" disabled={!allConsents || stage === 'idle'} onClick={() => run(acceptConsents)}>동의 기록</button>
-      </fieldset>
+      <EvidenceConsentChecklist
+        consents={consents}
+        canRecord={allConsents && stage !== 'idle'}
+        onToggle={(key, checked) => setConsents((prev) => ({ ...prev, [key]: checked }))}
+        onRecord={() => run(acceptConsents)}
+      />
 
       <div className="mt-6 flex flex-wrap gap-3">
         <button className="button-primary" disabled={stage !== 'consented'} onClick={() => run(pay)}>9,900원 결제</button>
-        <button className="button-primary" disabled={stage !== 'paid'} onClick={() => run(process)}>자료 정리 시작</button>
+        <button className="button-primary" disabled={stage !== 'paid'} onClick={() => run(processEvidence)}>자료 정리 시작</button>
       </div>
       {paymentId && <p className="mt-3 text-xs text-muted">결제 접수가 확인되었습니다.</p>}
-      {message && <p className="mt-4 rounded-2xl bg-tealSoft p-4 text-tealDark" role="status">{message}</p>}
+      {message && <p className="mt-4 whitespace-pre-line rounded-2xl bg-tealSoft p-4 text-tealDark" role="status">{message}</p>}
     </section>
   );
 }
