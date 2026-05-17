@@ -2,7 +2,7 @@
 
 ## 구현 요약
 
-독립 세이프플랜 MVP를 Next.js App Router 기반 한국어 웹앱으로 구현했다. 로컬/test 기본값은 mock provider와 파일시스템 JSON store이며, 운영 배포를 위해 Prisma PostgreSQL schema, GCP Cloud Run/Cloud SQL/Cloud Storage/Secret Manager/KMS 준비 문서를 포함했다.
+독립 세이프플랜 MVP를 Next.js App Router 기반 한국어 웹앱으로 구현했고, production 출시 차단 요소를 추가 하드닝했다. local/test는 mock provider와 local object store를 유지하지만, production은 Prisma PostgreSQL backend, GCS object storage, Toss 결제 승인, runtime readiness gate를 사용하도록 구성했다.
 
 ## 구현된 기능
 
@@ -14,13 +14,13 @@
 - 증거 정리 흐름
   - 업로드 제한/자료 부족 경고
   - 지원 MIME/용량 검증
-  - 원본 파일 AES-256-GCM envelope encryption mock/local 저장
+  - 원본 파일 AES-256-GCM envelope encryption 저장(local 또는 GCS object storage)
   - 사용자 메모, OCR/STT, AI 분류, 카드, PDF, 공유 URL 분리 저장
 - 동의/결제 gate
   - 민감정보, 원본 자료, 외부 AI/OCR/STT, 해외/제3자 처리, 결제 동의 기록
   - IP/User-Agent 해시 저장
   - 9,900원 mock payment full path
-  - Toss adapter/webhook skeleton
+  - Toss checkout SDK redirect + server-side confirm API + webhook retrieve-verify handler
 - AI pipeline
   - Mistral OCR adapter: `src/server/ai/providers/mistral-ocr.ts`
   - Groq STT adapter: `src/server/ai/providers/groq-stt.ts`
@@ -46,6 +46,14 @@
   - Korean UI copy
   - no legal advice/win prediction/lawyer-job matching/illegal collection guidance
   - required caution copy in UI/PDF/share flows
+- Production runtime hardening
+  - `SAFEPLAN_DB_BACKEND=prisma` normalized `safeplan_*` PostgreSQL persistence
+  - `STORAGE_PROVIDER=gcs` private object adapter for originals/reports
+  - signed anonymous session cookie
+  - security middleware: CSP, frame deny, no-sniff, no-referrer, permission policy, same-origin mutating API guard, per-instance rate limit
+  - `/api/health/live`, `/api/health/ready` production readiness gate
+  - Prisma migration under `prisma/migrations/`
+  - `docs/production-readiness.md`
 - Deployment artifacts
   - `Dockerfile`
   - `.dockerignore`
@@ -60,14 +68,16 @@
 
 ```bash
 pnpm lint && pnpm test && pnpm build && pnpm e2e && pnpm e2e:live
+docker build -t safeplan:production-hardening .
 ```
 
 결과:
 
 - `pnpm lint`: 통과 (`next lint` no errors + `tsc --noEmit` 통과)
-- `pnpm test`: 통과 — 5 files, 8 tests
-- `pnpm build`: 통과 — Next.js 15.5.18 production build, 21 static pages generated
+- `pnpm test`: 통과 — 6 files, 11 tests
+- `pnpm build`: 통과 — Next.js 15.5.18 production build, 24 static pages generated
 - `pnpm e2e`: 통과 — Playwright Chromium happy path 1 passed, live-provider spec 1 skipped
+- `docker build -t safeplan:production-hardening .`: 통과 — Prisma generate + Next production build 포함
 
 추가 수행:
 
@@ -94,7 +104,7 @@ pnpm e2e:live
 - `pnpm e2e:live`: 통과 — Playwright Chromium live provider full path 1 test passed
 - 실제 외부 호출 확인: `ocr:mistral=1`, `stt:groq=1`
 - 현재 `.env.local`의 `BASETEN_CLASSIFIER_URL`이 비어 있어 Baseten classifier live call은 blocked 상태이며 classification은 mock fallback으로 검증됐다.
-- Toss 실결제는 현재 MVP 구현 범위가 mock payment boundary이므로 `PAYMENT_PROVIDER=mock`으로 유지했다.
+- Local live E2E는 외부 AI 비용 검증에 초점을 맞춰 `PAYMENT_PROVIDER=mock`으로 유지했다. Toss 결제 redirect/confirm 구현은 운영 credential 연결 후 별도 smoke가 필요하다.
 
 ## Provider mode
 
@@ -138,6 +148,9 @@ pnpm e2e:live
 - `SESSION_SECRET`
 - `NEXT_PUBLIC_APP_URL`
 - `APP_URL`
+- `STORAGE_PROVIDER`
+- `SAFEPLAN_DB_BACKEND`
+- `APP_ENV`
 - `PAYMENT_PROVIDER`
 - `TOSS_CLIENT_KEY`
 - `TOSS_SECRET_KEY`
@@ -153,20 +166,21 @@ pnpm e2e:live
 - `GCS_BUCKET_DERIVED`
 - `GCS_BUCKET_REPORTS`
 - `KMS_KEY_NAME`
+- `ENVELOPE_MASTER_KEY_BASE64`
 - upload/share/retention limit variables
 
 ## 알려진 blocker / 운영 전 확인 필요
 
-- 실제 Mistral/Groq/Baseten 호출은 credential이 있어야 검증 가능하다. 로컬 검증은 mock provider로 완료했다.
-- Toss 실결제 승인/웹훅 서명 검증은 Toss 운영 키와 콘솔 webhook 설정 후 추가 보안 검증이 필요하다.
-- 현재 runtime persistence는 로컬/mock filesystem JSON store다. 운영 DB 테이블 계약은 Prisma schema로 준비되어 있으며 Cloud SQL/Supabase 운영 연결과 migration 적용이 필요하다.
-- Cloud Storage/KMS는 deployment pattern과 envelope encryption 구조를 준비했다. 운영 object adapter 통합은 실제 GCP 리소스 연결 후 추가 검증이 필요하다.
+- Baseten live classifier는 `BASETEN_CLASSIFIER_URL`이 있어야 실제 호출까지 검증 가능하다. 현재 local live E2E는 Mistral/Groq 실제 호출과 Baseten mock fallback을 확인했다.
+- Toss 실결제 redirect/승인은 구현됐지만, 운영 키와 Toss 콘솔 설정 후 실제 결제 smoke가 필요하다.
+- Cloud SQL/GCS/KMS/Secret Manager 리소스를 만든 뒤 `pnpm prisma:migrate`, Cloud Run 배포, `/api/health/ready` 200 확인이 필요하다.
+- Prisma backend는 normalized table replace + advisory lock 방식의 소규모 launch 구현이다. 트래픽 증가 전 row-level repository와 queue 분리가 필요하다.
 - 법률 문구는 guardrail 수준이며 법률 검토 완료 상태가 아니다.
 
 ## DETAILED_PLAN.md 대비 편차
 
-- MVP local/test mode는 production-like mock persistence를 사용한다. Prisma PostgreSQL schema와 prefixed table names는 제공하지만, route handlers는 로컬 E2E 안정성을 위해 JSON store repository를 사용한다.
-- Toss adapter는 skeleton 수준이며 실결제 redirect/승인 UI는 mock boundary로 대체했다.
+- MVP local/test mode는 local JSON/object store를 사용하고, production은 `SAFEPLAN_DB_BACKEND=prisma`와 `STORAGE_PROVIDER=gcs`로 전환한다.
+- Toss 실결제는 SDK redirect와 confirm API까지 구현했지만, 실제 운영 결제 smoke는 credential/콘솔 설정 후 필요하다.
 - Optional Cloud Tasks는 사용하지 않고 local processing endpoint를 구현했다.
 - PDF 생성은 서버 내 PDF-lib 기반 smoke/report 생성으로 구현했고, 브라우저 print-to-PDF 방식은 사용하지 않았다.
 

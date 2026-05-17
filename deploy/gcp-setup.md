@@ -76,12 +76,19 @@ projects/$GCP_PROJECT_ID/locations/asia-northeast3/keyRings/safeplan/cryptoKeys/
 for name in \
   safeplan-database-url safeplan-session-secret safeplan-next-public-app-url \
   safeplan-mistral-api-key safeplan-groq-api-key safeplan-baseten-api-key safeplan-baseten-classifier-url \
-  safeplan-toss-client-key safeplan-toss-secret-key safeplan-toss-webhook-secret safeplan-kms-key-name; do
+  safeplan-toss-client-key safeplan-toss-secret-key safeplan-toss-webhook-secret safeplan-kms-key-name \
+  safeplan-envelope-master-key; do
   printf "REPLACE_ME" | gcloud secrets create "$name" --data-file=- || true
 done
 ```
 
-필수 환경변수는 `.env.example`을 기준으로 합니다. 실제 provider 운영에는 `MISTRAL_API_KEY`, `GROQ_API_KEY`, `BASETEN_API_KEY`, `BASETEN_CLASSIFIER_URL`, Toss 키, `DATABASE_URL`, `SESSION_SECRET`, GCS/KMS 값이 필요합니다.
+Envelope master key 예시 생성:
+
+```bash
+openssl rand -base64 32 | gcloud secrets create safeplan-envelope-master-key --data-file=- || true
+```
+
+필수 환경변수는 `.env.example`을 기준으로 합니다. production은 `APP_ENV=production`, `SAFEPLAN_DB_BACKEND=prisma`, `STORAGE_PROVIDER=gcs`로 실행합니다. 실제 provider 운영에는 `MISTRAL_API_KEY`, `GROQ_API_KEY`, `BASETEN_API_KEY`, `BASETEN_CLASSIFIER_URL`, Toss 키, `DATABASE_URL`, `SESSION_SECRET`, GCS/KMS 값, `ENVELOPE_MASTER_KEY_BASE64`가 필요합니다.
 
 ## 7. 서비스 계정과 IAM
 
@@ -104,8 +111,10 @@ DATABASE_URL="postgresql://safeplan_app:PASSWORD@/safeplan?host=/cloudsql/${GCP_
 ## 9. Cloud Run 배포
 
 ```bash
-gcloud run services replace deploy/cloudrun.yaml --region="$GCP_REGION"
+envsubst < deploy/cloudrun.yaml | gcloud run services replace - --region="$GCP_REGION"
 gcloud run services update safeplan-web --region="$GCP_REGION" --allow-unauthenticated
+READY_URL=$(gcloud run services describe safeplan-web --region="$GCP_REGION" --format="value(status.url)")/api/health/ready
+curl -fsS "$READY_URL"
 ```
 
 또는 직접 배포:
@@ -125,3 +134,10 @@ gcloud run deploy safeplan-web \
 gcloud run revisions list --service=safeplan-web --region="$GCP_REGION"
 gcloud run services update-traffic safeplan-web --region="$GCP_REGION" --to-revisions REVISION_NAME=100
 ```
+
+## 11. 운영 smoke checklist
+
+- `/api/health/ready`가 200을 반환해야 합니다.
+- Toss 콘솔 success/fail URL과 webhook endpoint를 운영 도메인 기준으로 등록합니다.
+- Baseten classifier URL을 설정한 뒤 live E2E에서 `classification:baseten`을 확인합니다.
+- GCS originals/reports 객체가 private 상태로 생성/삭제되는지 확인합니다.

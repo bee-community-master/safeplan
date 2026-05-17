@@ -1,10 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { LEGAL_CAUTION_COPY, PRICE_KRW } from '@/lib/constants';
 
 type Stage = 'idle' | 'uploaded' | 'consented' | 'paid' | 'processed';
+type TossPaymentClient = { requestPayment: (method: string, options: Record<string, unknown>) => Promise<void> };
+
+declare global {
+  interface Window {
+    TossPayments?: (clientKey: string) => TossPaymentClient;
+  }
+}
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -15,6 +22,25 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
+function loadTossPayments(): Promise<void> {
+  if (window.TossPayments) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector<HTMLScriptElement>('script[data-safeplan-toss="true"]');
+    if (existing) {
+      existing.addEventListener('load', () => resolve(), { once: true });
+      existing.addEventListener('error', () => reject(new Error('toss_sdk_load_failed')), { once: true });
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://js.tosspayments.com/v1/payment';
+    script.async = true;
+    script.dataset.safeplanToss = 'true';
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('toss_sdk_load_failed'));
+    document.head.appendChild(script);
+  });
+}
+
 export function EvidenceUploadFlow({ caseId }: { caseId: string }) {
   const router = useRouter();
   const [files, setFiles] = useState<FileList | null>(null);
@@ -22,7 +48,40 @@ export function EvidenceUploadFlow({ caseId }: { caseId: string }) {
   const [message, setMessage] = useState('');
   const [paymentId, setPaymentId] = useState<string | null>(null);
   const [consents, setConsents] = useState({ sensitive: false, original: false, ai: false, overseas: false, payment: false });
+  const confirmationStarted = useRef(false);
   const allConsents = Object.values(consents).every(Boolean);
+
+  useEffect(() => {
+    if (confirmationStarted.current || typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('payment') === 'failed') {
+      setMessage(`결제가 완료되지 않았습니다: ${params.get('message') || params.get('code') || '사용자 취소 또는 인증 실패'}`);
+      return;
+    }
+    if (params.get('payment') !== 'success') return;
+    const paymentKey = params.get('paymentKey');
+    const orderId = params.get('orderId');
+    const amount = Number(params.get('amount'));
+    const returnedPaymentId = params.get('paymentId') || orderId;
+    if (!paymentKey || !orderId || !returnedPaymentId || !amount) {
+      setMessage('결제 승인 정보가 부족합니다. 다시 시도하세요.');
+      return;
+    }
+    confirmationStarted.current = true;
+    void run(async () => {
+      const response = await fetch('/api/payments/toss-confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ caseId, paymentId: returnedPaymentId, paymentKey, orderId, amount })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'toss_confirm_failed');
+      setPaymentId(returnedPaymentId);
+      setStage('paid');
+      setMessage('Toss 결제가 승인되었습니다. 이제 AI 초안 처리를 시작할 수 있습니다.');
+      window.history.replaceState(null, '', window.location.pathname);
+    });
+  }, [caseId]);
 
   async function upload() {
     if (!files?.length) return setMessage('업로드할 파일을 선택하세요.');
@@ -61,11 +120,36 @@ export function EvidenceUploadFlow({ caseId }: { caseId: string }) {
     const create = await fetch('/api/payments/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ caseId }) });
     const created = await create.json();
     if (!create.ok) throw new Error(created.error || 'payment_create_failed');
-    setPaymentId(created.payment.paymentId);
+    const payment = created.payment as {
+      paymentId: string;
+      provider: 'mock' | 'toss';
+      clientKey?: string;
+      orderId?: string;
+      orderName?: string;
+      amountKrw: number;
+      successUrl?: string;
+      failUrl?: string;
+    };
+    setPaymentId(payment.paymentId);
+
+    if (payment.provider === 'toss') {
+      if (!payment.clientKey || !payment.orderId || !payment.successUrl || !payment.failUrl) throw new Error('toss_payment_config_missing');
+      await loadTossPayments();
+      if (!window.TossPayments) throw new Error('toss_sdk_unavailable');
+      await window.TossPayments(payment.clientKey).requestPayment('카드', {
+        amount: payment.amountKrw,
+        orderId: payment.orderId,
+        orderName: payment.orderName || '독립 세이프플랜 자료 정리 리포트',
+        successUrl: payment.successUrl,
+        failUrl: payment.failUrl
+      });
+      return;
+    }
+
     const complete = await fetch('/api/payments/mock-complete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ caseId, paymentId: created.payment.paymentId })
+      body: JSON.stringify({ caseId, paymentId: payment.paymentId })
     });
     if (!complete.ok) throw new Error((await complete.json()).error || 'payment_failed');
     setStage('paid');
@@ -118,7 +202,7 @@ export function EvidenceUploadFlow({ caseId }: { caseId: string }) {
       </fieldset>
 
       <div className="mt-6 flex flex-wrap gap-3">
-        <button className="rounded-xl bg-clay px-5 py-3 font-semibold text-white disabled:opacity-50" disabled={stage !== 'consented'} onClick={() => run(pay)}>9,900원 mock 결제</button>
+        <button className="rounded-xl bg-clay px-5 py-3 font-semibold text-white disabled:opacity-50" disabled={stage !== 'consented'} onClick={() => run(pay)}>9,900원 결제</button>
         <button className="rounded-xl bg-emerald-700 px-5 py-3 font-semibold text-white disabled:opacity-50" disabled={stage !== 'paid'} onClick={() => run(process)}>OCR/STT/AI 초안 처리</button>
       </div>
       {paymentId && <p className="mt-2 text-xs text-stone-500">결제 ID: {paymentId}</p>}

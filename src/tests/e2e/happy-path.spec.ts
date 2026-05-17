@@ -22,7 +22,7 @@ test('safeplan local mock happy path', async ({ page, context }) => {
   }
   await page.getByRole('button', { name: '동의 기록' }).click();
   await expect(page.getByRole('status')).toContainText('동의가 기록');
-  await page.getByRole('button', { name: '9,900원 mock 결제' }).click();
+  await page.getByRole('button', { name: '9,900원 결제' }).click();
   await expect(page.getByRole('status')).toContainText('mock 결제가 완료');
   await page.getByRole('button', { name: 'OCR/STT/AI 초안 처리' }).click();
   await expect(page.getByText('AI 초안 카드 검수')).toBeVisible();

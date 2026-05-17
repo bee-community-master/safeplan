@@ -1,20 +1,11 @@
 import 'server-only';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
-import path from 'node:path';
 import { LIMITS } from '@/lib/constants';
 import { shouldIncludeByConfidence } from '@/lib/evidence';
 import type { ReportRecord, ShareLinkRecord } from '@/server/db/types';
-import { dataDir, readDb, updateDb } from '@/server/db/local-store';
+import { readDb, updateDb } from '@/server/db/local-store';
+import { deleteObject, readObject, writeObject } from '@/server/files/object-store';
 import { hashSecret, id, randomToken, sha256Hex, verifySecret } from '@/server/security/crypto';
 import { generateReportPdf } from './pdf';
-
-function reportsDir(): string {
-  return path.join(dataDir(), 'reports');
-}
-
-export function reportObjectPath(objectName: string): string {
-  return path.join(reportsDir(), objectName.replaceAll('/', '__'));
-}
 
 export async function generateReport(caseId: string): Promise<ReportRecord> {
   const db = await readDb();
@@ -25,17 +16,17 @@ export async function generateReport(caseId: string): Promise<ReportRecord> {
   );
   if (cards.length === 0) throw new Error('no_confirmed_cards');
   const files = db.evidenceFiles.filter((file) => file.caseId === caseId && file.deletedAt === null);
-  await mkdir(reportsDir(), { recursive: true });
   const pdf = await generateReportPdf({ caseRecord, cards, files });
   const now = new Date().toISOString();
   const objectName = `${caseId}/${Date.now()}-safeplan-report.pdf`;
-  await writeFile(reportObjectPath(objectName), pdf);
+  const pdfBucket = process.env.GCS_BUCKET_REPORTS || 'local-reports';
+  await writeObject(pdfBucket, objectName, pdf, 'application/pdf');
   return updateDb((mutableDb) => {
     const record: ReportRecord = {
       id: id('report'),
       caseId,
       version: mutableDb.reports.filter((item) => item.caseId === caseId).length + 1,
-      pdfBucket: process.env.GCS_BUCKET_REPORTS || 'local-reports',
+      pdfBucket,
       pdfObject: objectName,
       generatedAt: now,
       deletedAt: null
@@ -55,11 +46,11 @@ export async function readReportPdf(reportId: string): Promise<{ report: ReportR
   const db = await readDb();
   const report = db.reports.find((item) => item.id === reportId && item.deletedAt === null);
   if (!report) throw new Error('report_not_found');
-  return { report, pdf: await readFile(reportObjectPath(report.pdfObject)) };
+  return { report, pdf: await readObject(report.pdfBucket, report.pdfObject) };
 }
 
 export async function deleteReportObject(report: ReportRecord): Promise<void> {
-  await rm(reportObjectPath(report.pdfObject), { force: true });
+  await deleteObject(report.pdfBucket, report.pdfObject);
 }
 
 export async function createShareLink(reportId: string, password?: string | null): Promise<{ share: ShareLinkRecord; token: string }> {

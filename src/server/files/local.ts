@@ -1,10 +1,9 @@
 import 'server-only';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
-import path from 'node:path';
 import { inferMaterialType, validateUploadCandidates } from '@/lib/evidence';
 import type { EvidenceFileRecord } from '@/server/db/types';
-import { dataDir, updateDb } from '@/server/db/local-store';
+import { updateDb } from '@/server/db/local-store';
 import { decryptBuffer, encryptBuffer, id } from '@/server/security/crypto';
+import { deleteObject, readObject, writeObject } from './object-store';
 
 export interface UploadInputFile {
   name: string;
@@ -14,18 +13,9 @@ export interface UploadInputFile {
   userMemo?: string | null;
 }
 
-function originalsDir(): string {
-  return path.join(dataDir(), 'originals');
-}
-
-export function localObjectPath(objectName: string): string {
-  return path.join(originalsDir(), objectName);
-}
-
 export async function storeEvidenceFiles(caseId: string, files: UploadInputFile[]): Promise<EvidenceFileRecord[]> {
   const validation = validateUploadCandidates(files.map(({ name, mimeType, sizeBytes }) => ({ name, mimeType, sizeBytes })));
   if (!validation.ok) throw new Error(validation.errors.join('\n'));
-  await mkdir(originalsDir(), { recursive: true });
   const now = new Date().toISOString();
   const records: EvidenceFileRecord[] = [];
 
@@ -48,7 +38,7 @@ export async function storeEvidenceFiles(caseId: string, files: UploadInputFile[
       uploadedAt: now,
       deletedAt: null
     };
-    await writeFile(localObjectPath(record.gcsObject.replaceAll('/', '__')), encrypted.cipher);
+    await writeObject(record.gcsBucket, record.gcsObject, encrypted.cipher);
     records.push(record);
   }
 
@@ -72,10 +62,10 @@ export async function storeEvidenceFiles(caseId: string, files: UploadInputFile[
 }
 
 export async function readEvidencePlain(file: EvidenceFileRecord): Promise<Buffer> {
-  const payload = await readFile(localObjectPath(file.gcsObject.replaceAll('/', '__')));
+  const payload = await readObject(file.gcsBucket, file.gcsObject);
   return decryptBuffer(payload, file.encryptedDek);
 }
 
 export async function deleteEvidenceObject(file: EvidenceFileRecord): Promise<void> {
-  await rm(localObjectPath(file.gcsObject.replaceAll('/', '__')), { force: true });
+  await deleteObject(file.gcsBucket, file.gcsObject);
 }

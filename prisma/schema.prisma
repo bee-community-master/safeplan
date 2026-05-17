@@ -21,6 +21,7 @@ model Case {
   id             String           @id @default(cuid())
   userId         String
   user           User             @relation(fields: [userId], references: [id])
+  sessionId      String
   title          String
   status         String
   retentionUntil DateTime
@@ -34,6 +35,8 @@ model Case {
   reports        Report[]
   jobs           ProcessingJob[]
 
+  @@index([sessionId])
+  @@index([userId])
   @@map("safeplan_case")
 }
 
@@ -47,6 +50,7 @@ model ConsentRecord {
   ipHash        String?
   userAgentHash String?
 
+  @@index([caseId])
   @@map("safeplan_consent_record")
 }
 
@@ -63,11 +67,13 @@ model EvidenceFile {
   checksumSha256   String
   materialType     String
   processingStatus String
+  userMemo         String?
   uploadedAt       DateTime
   deletedAt        DateTime?
   results          ExtractionResult[]
   cards            EvidenceCard[]
 
+  @@index([caseId])
   @@map("safeplan_evidence_file")
 }
 
@@ -82,6 +88,7 @@ model ExtractionResult {
   createdAt      DateTime     @default(now())
   deletedAt      DateTime?
 
+  @@index([fileId])
   @@map("safeplan_extraction_result")
 }
 
@@ -108,6 +115,8 @@ model EvidenceCard {
   updatedAt       DateTime     @updatedAt
   deletedAt       DateTime?
 
+  @@index([caseId])
+  @@index([fileId])
   @@map("safeplan_evidence_card")
 }
 
@@ -122,6 +131,7 @@ model PaymentIntent {
   createdAt          DateTime  @default(now())
   paidAt             DateTime?
 
+  @@index([caseId])
   @@map("safeplan_payment_intent")
 }
 
@@ -136,6 +146,7 @@ model Report {
   deletedAt   DateTime?
   shareLinks  ShareLink[]
 
+  @@index([caseId])
   @@map("safeplan_report")
 }
 
@@ -149,6 +160,7 @@ model ShareLink {
   revokedAt    DateTime?
   accessCount  Int       @default(0)
 
+  @@index([reportId])
   @@map("safeplan_share_link")
 }
 
@@ -160,6 +172,8 @@ model AuditEvent {
   metadataJson Json
   createdAt    DateTime @default(now())
 
+  @@index([caseId])
+  @@index([userId])
   @@map("safeplan_audit_event")
 }
 
@@ -175,5 +189,6 @@ model ProcessingJob {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([caseId])
   @@map("safeplan_processing_job")
 }

@@ -29,7 +29,14 @@ export function randomToken(bytes = 32): string {
 }
 
 function masterKey(): Buffer {
-  const material = process.env.KMS_KEY_NAME || process.env.SESSION_SECRET || 'safeplan-local-dev-master-key-change-me';
+  const configured = process.env.ENVELOPE_MASTER_KEY_BASE64;
+  if (configured) {
+    const key = Buffer.from(configured, 'base64');
+    if (key.byteLength !== 32) throw new Error('envelope_master_key_invalid');
+    return key;
+  }
+  if (process.env.APP_ENV === 'production') throw new Error('envelope_master_key_missing');
+  const material = process.env.SESSION_SECRET || 'safeplan-local-dev-master-key-change-me';
   return createHash('sha256').update(material).digest();
 }
 
@@ -72,4 +79,14 @@ export function decryptBuffer(cipherPayload: Buffer, encryptedDek: string): Buff
 export function safeMetadataHash(value: string | null): string | null {
   if (!value) return null;
   return createHmac('sha256', process.env.SESSION_SECRET || 'safeplan-local-session-secret').update(value).digest('hex');
+}
+
+export function signValue(value: string): string {
+  return createHmac('sha256', process.env.SESSION_SECRET || 'safeplan-local-session-secret').update(value).digest('base64url');
+}
+
+export function verifySignedValue(value: string, signature: string): boolean {
+  const expected = Buffer.from(signValue(value), 'base64url');
+  const actual = Buffer.from(signature, 'base64url');
+  return expected.length === actual.length && timingSafeEqual(expected, actual);
 }

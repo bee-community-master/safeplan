@@ -3,6 +3,7 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { LIMITS } from '@/lib/constants';
 import type { SafeplanDb } from './types';
+import { readPrismaDb, writePrismaDb } from './prisma-store';
 
 const defaultDb = (): SafeplanDb => ({
   users: [],
@@ -22,6 +23,10 @@ let queue = Promise.resolve();
 let cachedPath = '';
 let cachedDb: SafeplanDb | null = null;
 
+export function dbBackend(): 'local' | 'prisma' {
+  return process.env.SAFEPLAN_DB_BACKEND === 'prisma' ? 'prisma' : 'local';
+}
+
 export function dataDir(): string {
   return process.env.SAFEPLAN_DATA_DIR || path.join(process.cwd(), '.safeplan-data');
 }
@@ -37,6 +42,7 @@ export function retentionUntil(from = new Date()): string {
 }
 
 export async function readDb(): Promise<SafeplanDb> {
+  if (dbBackend() === 'prisma') return readPrismaDb();
   const currentPath = dbPath();
   if (cachedDb && cachedPath === currentPath) return structuredClone(cachedDb);
   await mkdir(path.dirname(currentPath), { recursive: true });
@@ -58,6 +64,10 @@ export async function readDb(): Promise<SafeplanDb> {
 }
 
 async function writeDb(db: SafeplanDb): Promise<void> {
+  if (dbBackend() === 'prisma') {
+    await writePrismaDb(db);
+    return;
+  }
   const currentPath = dbPath();
   await mkdir(path.dirname(currentPath), { recursive: true });
   const tempPath = `${currentPath}.${process.pid}.${Date.now()}.tmp`;

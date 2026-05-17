@@ -1,9 +1,10 @@
-import { verifyTossWebhook } from '@/server/payments/provider';
+import { handleTossWebhook } from '@/server/payments/provider';
 import { jsonError, jsonOk } from '@/server/http';
 
-export async function POST() {
+export async function POST(request: Request) {
   try {
-    return jsonOk(await verifyTossWebhook());
+    const body = await request.json();
+    return jsonOk(await handleTossWebhook(body));
   } catch (error) {
     return jsonError(error, 400);
   }

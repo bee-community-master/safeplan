@@ -18,7 +18,25 @@ spec:
         - image: asia-northeast3-docker.pkg.dev/${GCP_PROJECT_ID}/safeplan/safeplan-web:latest
           ports:
             - containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /api/health/live
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /api/health/ready
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 20
           env:
+            - name: APP_ENV
+              value: production
+            - name: SAFEPLAN_DB_BACKEND
+              value: prisma
+            - name: STORAGE_PROVIDER
+              value: gcs
             - name: GCP_REGION
               value: asia-northeast3
             - name: PAYMENT_PROVIDER
@@ -28,6 +46,11 @@ spec:
             - name: DB_TABLE_AND_SCHEMA_PREFIX
               value: safeplan
             - name: NEXT_PUBLIC_APP_URL
+              valueFrom:
+                secretKeyRef:
+                  name: safeplan-next-public-app-url
+                  key: latest
+            - name: APP_URL
               valueFrom:
                 secretKeyRef:
                   name: safeplan-next-public-app-url
@@ -82,9 +105,14 @@ spec:
                 secretKeyRef:
                   name: safeplan-kms-key-name
                   key: latest
+            - name: ENVELOPE_MASTER_KEY_BASE64
+              valueFrom:
+                secretKeyRef:
+                  name: safeplan-envelope-master-key
+                  key: latest
             - name: GCS_BUCKET_ORIGINALS
-              value: safeplan-originals
+              value: ${GCP_PROJECT_ID}-safeplan-originals
             - name: GCS_BUCKET_DERIVED
-              value: safeplan-derived
+              value: ${GCP_PROJECT_ID}-safeplan-derived
             - name: GCS_BUCKET_REPORTS
-              value: safeplan-reports
+              value: ${GCP_PROJECT_ID}-safeplan-reports
