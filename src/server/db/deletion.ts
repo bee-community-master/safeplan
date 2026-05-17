@@ -31,10 +31,12 @@ export async function deleteCaseDeep(caseId: string): Promise<{
     const files = db.evidenceFiles.filter((file) => file.caseId === caseId);
     const activeFiles = files.filter((file) => file.deletedAt === null);
     const filesToDelete = activeFiles.map((file) => ({ ...file }));
+    const fileIdsToScrubObjectRefs = filesToDelete.map((file) => file.id);
     const fileIds = new Set(files.map((file) => file.id));
     const reports = db.reports.filter((item) => item.caseId === caseId);
     const activeReports = reports.filter((report) => report.deletedAt === null);
     const reportsToDelete = activeReports.map((report) => ({ ...report }));
+    const reportIdsToScrubObjectRefs = reportsToDelete.map((report) => report.id);
     let deletedExtractions = 0;
     let deletedCards = 0;
     let deletedReports = 0;
@@ -43,8 +45,6 @@ export async function deleteCaseDeep(caseId: string): Promise<{
       if (!file.deletedAt) file.deletedAt = now;
       file.processingStatus = 'deleted';
       file.originalName = '삭제된 자료';
-      file.gcsBucket = '';
-      file.gcsObject = '';
       file.encryptedDek = '';
       file.checksumSha256 = '';
       file.userMemo = null;
@@ -78,8 +78,6 @@ export async function deleteCaseDeep(caseId: string): Promise<{
         report.deletedAt = now;
         deletedReports += 1;
       }
-      report.pdfBucket = '';
-      report.pdfObject = '';
       report.snapshotJson = deletedSnapshot(report.id);
       for (const share of db.shareLinks.filter((item) => item.reportId === report.id)) {
         if (share.revokedAt === null) {
@@ -106,10 +104,22 @@ export async function deleteCaseDeep(caseId: string): Promise<{
     return {
       result: { deletedFiles: activeFiles.length, deletedExtractions, deletedCards, revokedShares, deletedReports },
       filesToDelete,
-      reportsToDelete
+      reportsToDelete,
+      fileIdsToScrubObjectRefs,
+      reportIdsToScrubObjectRefs
     };
   });
   await Promise.all(deleted.filesToDelete.map((file) => deleteEvidenceObject(file)));
   await Promise.all(deleted.reportsToDelete.map((report) => deleteReportObject(report)));
+  await updateDb((db) => {
+    for (const file of db.evidenceFiles.filter((item) => deleted.fileIdsToScrubObjectRefs.includes(item.id))) {
+      file.gcsBucket = '';
+      file.gcsObject = '';
+    }
+    for (const report of db.reports.filter((item) => deleted.reportIdsToScrubObjectRefs.includes(item.id))) {
+      report.pdfBucket = '';
+      report.pdfObject = '';
+    }
+  });
   return deleted.result;
 }
